@@ -1,24 +1,57 @@
-# tools｜失败驱动的确定性工具
+# tools｜窄而确定性的支持能力
 
-第一阶段允许这里没有实际工具。
+`tools/` 不等于 The World 的插件层。
 
-只有真实试玩反复暴露某类 Agent 不适合可靠承担的问题时，才增加程序化能力。
+- RPG 游戏模式、UI、地图、战斗、政治、经济等产品能力 → 优先归 `plugins/`；
+- 窄而可复用的确定性支持能力 → 归 `tools/`。
 
-候选类型包括：
+## 1. 两类进入理由
 
-- deterministic dice / RNG；
-- arithmetic / rule calculator；
+### Product-value mechanic/tool
+
+如果某个确定性能力本身就是游戏机制或体验的一部分，例如：
+
+- dice / RNG；
+- 距离计算；
+- 战斗解析；
+- 地图几何；
+
+它可以被对应 RPG 插件消费，不需要先证明“模型犯错”。
+
+### Failure-driven reliability tool
+
+如果能力主要用于防止或修复模型 / 文件错误，例如：
+
 - reference / link validator；
 - duplicate identity detector；
 - state consistency lint；
-- save / snapshot helper。
+- atomic writer；
+- schema checker；
+- migration helper；
 
-新增工具前必须回答：
+则默认只有真实试玩反复暴露问题后才增加。
+
+新增这类工具前必须回答：
 
 1. 已发生的真实失败是什么？
-2. Agent 自检是否仍无法稳定解决？
-3. 最窄工具是什么？
-4. 它是否会接管故事创作或限制世界主动性？
-5. 它是否真的降低维护成本？
+2. 失败是否反复、昂贵或难以察觉？
+3. Undo / Regenerate / Restore / Agent 自检为什么不够？
+4. 最窄确定性修复是什么？
+5. 它是否会损害 GM 创意、世界主动性、玩家自由或游戏流畅度？
 
-> 工具保护可靠性，不负责决定故事应该怎么发展。
+正确顺序：
+
+```text
+真实失败
+→ 最窄工具
+→ 再试玩
+```
+
+而不是：
+
+```text
+理论上可能出错
+→ 提前建设完整 Guardrail / Runtime
+```
+
+> 工具服务游戏；不要让可靠性工具成为产品 Owner。
