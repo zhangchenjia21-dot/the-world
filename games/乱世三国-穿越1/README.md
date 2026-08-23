@@ -8,8 +8,18 @@
 - Created: 2026-08-24（本局开局）
 - Source Assets:
   - `library/worlds/汉末三国_天下未定_World_Pack_v0.2.3.md`
-  - `library/mechanics/穿越与系统_Expansion_Pack_v0.2.md`（Traveler ON / System ON · Privileged）
-  - 其余 `library/mechanics/` 机制包作为轻量参考语义，非数值引擎
+  - 已启用机制拓展包（全写实核心组合，模块配置见 `state/CURRENT.md`）：
+    - `library/mechanics/穿越与系统_Expansion_Pack_v0.2.md`（Traveler ON / System ON · Privileged）
+    - `library/mechanics/人物能力与技艺_Expansion_Pack_v0.1.5.md`
+    - `library/mechanics/生存需求与环境_Expansion_Pack_v0.2.md`
+    - `library/mechanics/身体状态核心_Expansion_Pack_v0.1.md`
+    - `library/mechanics/战斗核心_Expansion_Pack_v0.1.md`
+    - `library/mechanics/名望与社会评价核心_Expansion_Pack_v0.1.md`
+    - `library/mechanics/关系与恋爱核心_Expansion_Pack_v0.2.md`
+    - `library/mechanics/家族与亲缘核心_Expansion_Pack_v0.1.md`
+    - `library/mechanics/政治与公共权力核心_Expansion_Pack_v0.1.md`
+    - `library/mechanics/组织与任职核心_Expansion_Pack_v0.1.2.md`
+  - 未启用：魔法族三件套（与本世界写实基调冲突）
   - `library/characters/汉末三国/` 历史人物卡按需启用
 
 ## Read First
