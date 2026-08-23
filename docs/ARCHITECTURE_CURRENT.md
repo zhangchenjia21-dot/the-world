@@ -1,45 +1,41 @@
 ---
 title: The World｜DSH-native RPG 工作架构
 status: current-experimental-architecture
-version: 0.2
+version: 0.3
 updated: 2026-08-23
 canonical_product_spec: PRODUCT_SPEC_CURRENT.md
 reference_host: DeepSeek Harness
+current_stage: TW-00.5 Bare DSH Capability Probe
 ---
 
 # The World｜DSH-native RPG 工作架构 CURRENT
 
 ## 0. Architecture Thesis
 
-Stage 0 当前工作架构：
+当前工作架构：
 
 ```text
 DeepSeek Harness
 = Agent Host + Provider / Model + Plugin Runtime + Generic Tooling + Session / UI Foundation
 
 The World World Core
-= RPG Game Mode + Required Context + GM Guidance + Workspace Coordination
+= RPG Game Mode + Thin GM / World / Workspace Coordination
 
-Filesystem Workspace
-= Durable World / Story / Memory / Save Substrate
+Persistent World Workspace
+= Durable State + Story + Memory + Saves
 
-RPG Experience Plugins
-= UI / Map / Mechanics / Expansion Value
+RPG Experience / Mechanics Plugins
+= UI + Map + Mechanics + Expansion Value
 
 Recovery
 > Preventive Restriction
 ```
 
-The World 不重新实现通用 Agent Runtime；优先把 RPG 特有能力挂接到 DSH 已公开的插件与 capability seams 上。
+The World 不重新实现通用 Agent Runtime；优先把 RPG 特有能力挂接到 DSH documented extension / plugin seams。
 
-目标不是证明“文件系统永远足够”或“模型永远不会错”，而是用最直接的 Agent-native 方案先证明真实游戏价值，再由实际体验决定哪些能力值得程序化。
+Bare DSH Capability Probe 已经表明：强模型 + DSH 本身拥有相当强的 GM、自然语言 adjudication、文件维护与剧情组织能力。因此 TW-01 的架构目标进一步收紧为：
 
-DeepSeek Harness 当前官方架构把 model adapter、tool registry、session log、agent loop、UI/editor integration 等都作为插件或扩展点；The World 默认利用这些 seam，而不是 patch / fork DSH core。
-
-参考：
-
-- https://github.com/deepseek-ai/deepseek-harness
-- https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/architecture.md
+> **只补 Bare DSH 已经真实暴露的长期 RPG 缺口，不重复实现模型已经会做的能力。**
 
 ---
 
@@ -49,27 +45,30 @@ DeepSeek Harness 当前官方架构把 model adapter、tool registry、session l
 
 - Agent loop；
 - Provider / Model adapter；
-- 通用 tool registry / execution；
-- Session 与其事件流；
+- tool registry / execution；
+- Session 与事件流；
 - 插件装载与生命周期；
-- 通用 Web / headless host 基础；
-- DSH 自身的系统 Prompt / Agent capability assembly。
+- 通用 Web / headless host；
+- DSH 自身 system prompt / agent capability assembly；
+- 通用 UI / editor integration foundation。
 
 ### The World Owns
 
-- World Core 游戏模式；
-- RPG 世界语义与 GM 原则；
+- World Core RPG Game Mode；
+- RPG 世界语义与 GM coordination；
 - reusable RPG assets；
 - game-local world truth；
+- durable entity persistence 语义；
 - story / memory / save 语义；
-- RPG UI / Map / Mechanics 等插件；
+- protagonist control preferences；
+- RPG UI / Map / Mechanics Plugins；
 - 与 DSH 的薄集成层。
 
-架构原则：
+原则：
 
 > **DSH-native, not DSH-internal-coupled.**
 
-DSH 当前处于 Developer Preview，兼容性可能变化。The World 可以适配 DSH 插件 API，但长期世界资产和 game-local truth 应尽量保持稳定、可迁移，不让几十小时游戏历史依赖某个短期内部事件结构才能解释。
+长期 game data 不应依赖某个短期 DSH 内部事件结构才能解释。
 
 ---
 
@@ -80,13 +79,13 @@ library/
 → reusable source assets
 
 plugins/
-→ The World RPG plugins for DeepSeek Harness
+→ World Core + RPG Experience / Mechanics Plugins
 
 games/<game-id>/state/
 → current game-local canonical reality
 
 games/<game-id>/story/
-→ important historical narrative ledger
+→ important historical ledger / commitments / consequences
 
 games/<game-id>/memory/
 → context compression / retrieval aids
@@ -98,90 +97,154 @@ tools/
 → narrow deterministic support utilities
 
 docs/
-→ project product / architecture truth
+→ product / architecture / experiment truth
 ```
 
-`plugins/` 与 `tools/` 明确分离：
+`plugins/` 与 `tools/` 分离：
 
-- `plugins/` 可以因为**直接增加游戏价值**而存在；
-- `tools/` 中主要用于纠错、校验或基础可靠性的能力，默认由真实失败驱动。
+- `plugins/` 可以因为直接增加游戏价值而存在；
+- `tools/` 若主要用于防错，默认由真实失败驱动。
 
 ---
 
-## 3. RPG Plugin Layers
+## 3. World Core｜Evidence-driven Thin Core
 
-### 3.1 World Core Plugin
+World Core 是 TW-01 Shared Foundation，但不再假设需要一套大型 RPG Runtime。
 
-World Core 是 The World 第一条真实纵向的 Shared Foundation。
+### 3.1 当前已被真实证据拉动的候选职责
 
-职责：
+#### A. Game Entry / Recovery
 
-- 让 DSH Agent 明确进入 / 继续 The World 游戏模式；
-- 每个实际游戏回合提供必要且有界的游戏上下文；
-- 提供 GM 核心原则、Player Agency、Persistent World、Player Spotlight、文件 Owner 与恢复路径；
-- 帮助 Agent 判断应读取哪些 state / story / memory / source；
-- 帮助 Agent 在回合后维护必要 durable changes；
-- 保持游戏基础设施尽量不打断玩家叙事体验。
+- 进入 / 继续 The World 游戏模式；
+- 找到当前 game；
+- 读取恢复入口；
+- 在全新 DSH Session 中恢复必要 game-local reality；
+- 只装载当前相关上下文，不把全部历史塞进每轮 context。
 
-World Core 的“强制”语义是：
+#### B. Durable Change Coordination
 
-> 游戏模式下稳定存在的协调上下文和职责约定。
+每次游戏交互后，帮助 Agent 判断是否出现真正需要长期存在的变化，例如：
 
-它**不默认意味着**：
+- 新 NPC / 新身份；
+- 关系变化；
+- 承诺 / 债务 / 仇恨；
+- 同伴 / 敌对 / 雇佣；
+- 持续伤情；
+- 地点变化；
+- 势力变化；
+- unresolved consequence；
+- 任务 / 机制长期状态。
 
-- deterministic approval gate；
+Bare DSH Probe 已重复暴露：玩家自身状态与 session log 会被较积极维护，但动态 NPC durable state 容易漏写。
+
+因此 World Core 当前最明确的真实候选价值之一是：
+
+> **帮助 Agent 识别“刚刚创造出来的什么东西已经成为世界历史的一部分”。**
+
+这不等于要求所有实体先提交 schema / JSON 再审批。
+
+#### C. GM / World Semantics
+
+稳定提供少量高价值语义：
+
+```text
+Persistent World
+World Independence + Player Spotlight
+Player owns Attempt
+World owns Consequence
+Model Freedom
+Recovery First
+```
+
+#### D. Agency Authorization Context
+
+World Core / game preference 应能让 Agent知道当前 protagonist control mode 与临时玩家授权范围。
+
+Player Agency 在架构上视为 authorization boundary，不是“Agent 永远不能替主角执行任何动作”。
+
+候选模式：
+
+- Full Control；
+- Light Delegation；
+- Narrative Delegation。
+
+共同基线：
+
+> **Compress dead time; stop at meaningful choice.**
+
+### 3.2 World Core 明确不默认做
+
+- deterministic narrative approval gate；
 - typed mutation pipeline；
-- 每个世界事实必须先通过程序批准；
-- 限制模型可创造哪些剧情；
-- 限制玩家可尝试哪些游戏行为。
+- 每个世界事实程序批准；
+- 玩家行为白名单；
+- 模型剧情白名单；
+- 每回合固定更新全部文件；
+- 每个临时路人建立重型 entity record；
+- 全世界逐实体 tick。
 
-World Core 首先帮助模型成为更稳定的长期 GM，而不是把模型变成受控状态机。
+---
 
-### 3.2 Experience / Mechanics Plugins
+## 4. RPG Experience / Mechanics Plugins
 
 包括但不限于：
 
-- RPG UI；
+- RPG UI / Presentation；
 - Map / Visualization；
-- 战斗；
-- 政治；
-- 经济；
-- 角色成长；
-- 特定世界扩展机制。
+- Combat；
+- Politics；
+- Economy；
+- Character Progression；
+- System / Quest；
+- Inventory；
+- 世界专属扩展机制。
 
-这些能力可以因为：
+这些插件可以由**产品价值**直接驱动，不要求先证明模型失败。
 
-- 更强沉浸感；
-- 更清晰游戏信息；
-- 新交互方式；
-- 新机制深度；
-- 传统 RPG 体验；
+### 4.1 Chat + Persistent UI
 
-直接进入产品路线，不需要先证明“模型犯错”。
+Bare DSH Probe 已经形成正式体验原则：
 
-它们仍应优先利用 DSH 的 documented extension points，而不是另造 Host。
+> **Chat 展示机制事件；UI 承载机制当前状态。**
 
-### 3.3 Guardrail / Reliability Utilities
+Chat 适合机制触发、判定、角色演绎和即时后果；Persistent UI 适合长期查询：
 
-例如：
+- System；
+- Quest；
+- Character / Relationship；
+- Map；
+- Faction / Reputation；
+- Inventory / Economy；
+- Save / Restore；
+- Protagonist Control Mode。
 
-- consistency validator；
-- duplicate identity detector；
-- atomic writer；
-- schema checker；
-- migration helper。
-
-若其主要目的只是“防模型出错”，则默认遵循 Failure-driven Tooling：
+### 4.2 UI Truth Boundary
 
 ```text
-真实重复失败
-→ 最窄修复
-→ 再试玩
+Game Workspace / Canonical State
+        ↓
+Plugin projection / view model
+        ↓
+RPG UI
 ```
+
+UI 不应成为第二 game truth。
+
+插件临时 runtime / cache state 只有在构成长期世界事实时才写回对应 Owner。
+
+### 4.3 Agent Trace Presentation
+
+DSH 默认 `think/read/write/tool` 执行轨迹不适合作为 RPG 主阅读流。
+
+正式方向：
+
+> **隐藏工作噪音，不限制 Agent 工作能力。**
+
+UI 默认折叠 / 隐藏 Agent 工作轨迹，但保留可选 debug / inspect surface。
 
 ---
 
-## 4. Library
+## 5. Library / Source Assets
 
 ```text
 library/
@@ -191,20 +254,29 @@ library/
 └─ lore/
 ```
 
-Source 语义保持：
+Source：
 
 - 开始一局前存在；
 - 可跨 game 复用；
-- 不被某一局反向污染；
-- Stage 0 不冻结万能资产 Schema。
+- 不被单局静默反向污染；
+- Stage 0 不冻结万能 Schema。
 
-允许 Markdown、JSON / YAML、图片、地图、表格或其它合法资料，只要求 Agent / 插件能够理解其用途，并保持 Source 与单局演化边界。
+### Source Fidelity
 
-如果真实资产消费证明需要最小 manifest，再从实际消费需求反推。
+Bare DSH Probe 已开始出现正史 / 演义 / 原创素材边界问题。
+
+当前不先设计复杂 provenance system，但未来 Source 需要能够至少表达其设定口径，例如：
+
+- 正史；
+- 演义；
+- 混合；
+- 原创架空。
+
+是否需要 manifest，由真实资产消费继续决定。
 
 ---
 
-## 5. Game Workspace
+## 6. Game Workspace
 
 每局 game 自包含：
 
@@ -217,112 +289,145 @@ games/<game-id>/
 └─ saves/
 ```
 
-### 5.1 `state/`
+### 6.1 `state/`
 
 回答：**这局现在真实是什么。**
 
-`state/CURRENT.md` 是第一版恢复入口。
+`state/CURRENT.md` 可作为恢复入口；达到真实规模压力后再拆分 characters / factions / locations / items / world 等域。
 
-只有达到真实规模、冲突或检索压力后再按 characters / scenes / factions / items / world 等领域拆分。
+### 6.2 Durable Identity
 
-### 5.2 `story/`
+一个运行中动态产生的实体若已经形成会影响未来判断的 durable fact，应进入 game-local state，即使：
+
+- 它不是 Source 角色；
+- 它不是历史名人；
+- 玩家尚不知道姓名；
+- 它后续剧情权重可能很低。
+
+正式原则：
+
+> **Importance controls attention, not existence.**
+
+例如玩家只知道“老卒”时，玩家 UI 可以显示：
+
+```text
+老卒（姓名未知）
+```
+
+内部只需要保证未来能稳定认出这是同一个 game-local entity；第一阶段不要求为此建设复杂全局实体平台。
+
+### 6.3 `story/`
 
 回答：**发生过哪些未来值得追溯的事情。**
 
-可保存 timeline、important events、unresolved hooks、commitments、consequences。
+保存 important events、commitments、consequences、unresolved hooks。
 
-不是逐字聊天日志，也不是 current state 第二副本。
+不是 current state 第二副本，也不要求逐字聊天日志。
 
-### 5.3 `memory/`
+### 6.4 `memory/`
 
 回答：**下一次高质量主持最值得恢复什么。**
 
-Memory 是 lossy compression / retrieval aid；允许压缩和重写，不覆盖 `state/` current truth。
+Memory 是 lossy compression / retrieval aid；允许压缩和重写，不覆盖 current truth。
 
-### 5.4 `saves/`
+### 6.5 `saves/`
 
 语义：
 
-> save 是一个明确可恢复到的游戏现场。
+> **Save 是一个明确可恢复到的游戏现场。**
 
-具体实现暂不冻结，可由 snapshot、Git、目录复制或 DSH / The World 插件能力实现。
+Bare DSH 当前 workspace 更接近 latest-state save，不等于玩家级 rollback system。
 
-在 Model Freedom 路线下，Undo / Regenerate / Restore 的产品价值高于构建“绝不允许模型写错”的重型约束。
+具体实现暂不冻结，可组合：
+
+- snapshot；
+- Git-like versioning；
+- directory copy；
+- DSH session/fork capability；
+- The World plugin recovery metadata。
+
+最终 Restore 需要避免“文件回到 T2，但 Agent 聊天记忆还在 T5”的时间线错位。
 
 ---
 
-## 6. Persistent World Model
+## 7. Persistent World Model
 
-The World 不实现“所有实体每回合都 tick”的全量后台模拟器。
+The World 不实现所有实体每回合 tick 的全量后台模拟器。
 
-世界持续性由 GM 根据以下因素维护：
+世界持续性由 GM 根据：
 
 - 时间经过；
-- 已建立的人物目标；
+- 人物目标；
 - 势力与冲突；
-- 既有承诺与因果；
+- 承诺与因果；
 - 玩家行为留下的后果；
-- 当前最相关的世界变化。
+- 当前世界相关性；
 
-正式原则：
+选择性维护。
 
 ```text
 Persistent != Fully Simulated
 ```
 
-玩家视野外的世界可以演化，但无需计算无关细节。
+低重要度 NPC 可以：
 
-同时：
+- 更少进入上下文；
+- 更粗粒度离屏推进；
+- UI 中降低 prominence；
 
-> **World Independence + Player Spotlight**
-
-世界不围绕玩家才存在，但 GM 应主动把有意义、有戏剧性的冲突和机会尽量组织到玩家可感知、可参与的舞台上。
+但不能因为资源优先级低而从 canonical reality 中消失。
 
 ---
 
-## 7. Turn / Interaction Model
+## 8. Turn / Interaction Model
 
-The World 第一阶段不另造 Formal Turn Engine，继续使用 DSH 自身 turn / step / session 基础。
+第一阶段不另造 Formal Turn Engine，继续使用 DSH turn / step / session 基础。
 
-概念上的一个游戏交互：
+概念交互：
 
 ```text
-World Core 提供游戏模式 + 必要上下文
+World Core 提供 game mode + necessary context + control preference
 +
-Agent 按需读取 game workspace / source
+Agent 按需读取 workspace / source
 ↓
 GM 主持世界并响应玩家
 ↓
-玩家行为与世界行为形成后果
+必要时自动压缩 low-value process
+↓
+遇到 meaningful choice 时按授权边界决定是否停下
+↓
+玩家行为 + 世界行为形成后果
 ↓
 Agent 识别 durable changes
 ↓
 更新正确 Owner
 ↓
-必要时压缩 memory / 创建 recovery point
+必要时创建 recovery point
 ↓
 继续游戏
 ```
 
-实现上 World Core 最终使用哪一个 DSH prompt / agent / session extension seam，在 TW-01 根据当前 DSH 正式接口选择；这属于 non-blocking implementation decision。
+### Meaningful Choice Boundary
 
----
-
-## 8. Player Attempt & Consequence Semantics
-
-玩家可以尝试任何游戏内行为。
-
-程序层默认不因为行为“不理性”“太疯狂”“不是推荐路线”而拒绝。
+“准备前往东线”不能默认等价于：
 
 ```text
-Player owns Attempt
-World owns Consequence
-GM owns Playability of the Consequence
+采购完成
+→ 自动出发
+→ 自动处理遭遇
+→ 自动接受投效
+→ 自动抵达目标
 ```
 
-玩家失败、受伤、被捕、失去机会、关系恶化、重大损失甚至死亡都可以存在，只要它们来自世界因果而不是预设剧本强迫。
+但也不要求 GM 每走一步都询问。
 
-GM 应尽量让成功和失败都产生新的处境、选择、关系或长期后果，而不是把失败机械压缩成“Game Over”。
+架构目标是允许：
+
+- 无意义时间快进；
+- 例行行为托管；
+- 角色性格驱动的小动作；
+
+同时在重大承诺、路线、阵营、关系和风险选择上按当前授权范围返回控制权。
 
 ---
 
@@ -330,28 +435,27 @@ GM 应尽量让成功和失败都产生新的处境、选择、关系或长期�
 
 默认：
 
-- 模型可以自由主持；
-- 模型可以创造 NPC / 场景 / 事件；
-- 模型可以根据世界因果推进离屏变化；
+- 模型自由主持；
+- 模型自由创造 NPC / 场景 / 事件；
+- 模型可推进离屏世界；
 - 模型自行维护工作区；
-- 不要求每项自然语言内容先结构化 proposal 再由程序 commit；
-- 不以通用生命周期方法中的 typed commit 模式作为本项目默认前提。
+- 不要求自然语言内容先转 typed proposal；
+- 不以 prevent-all-errors 作为架构目标。
 
-本项目当前显式选择：
+```text
+Freedom Before Prevention
+Prefer Recovery over Prevention
+```
 
-> **Freedom Before Prevention**
-
-> **Prefer recovery over prevention**
-
-如果模型偶尔犯错且可低成本发现，优先使用：
+优先：
 
 - Undo；
 - Regenerate；
-- 手工 / Agent 修正；
+- Agent / 人工修正；
 - Restore；
-- 从 Save 分支。
+- Save branch。
 
-只有错误成为反复、昂贵、难察觉或破坏核心体验的系统性问题，才升级 guardrail。
+只有重复、昂贵、难察觉或破坏核心体验的问题才升级 guardrail。
 
 ---
 
@@ -359,40 +463,42 @@ GM 应尽量让成功和失败都产生新的处境、选择、关系或长期�
 
 ### Current State
 
-只有会影响后续世界判断、互动、恢复或规则的 durable fact 进入 state。
+只有会影响后续世界判断、互动、恢复或机制的 durable fact 进入 state。
+
+### Dynamic Entity
+
+首次出现不等于必须建档；但一旦形成关系、承诺、持续伤情、未来后果、同伴 / 敌对关系、关键信息或其它 durable identity，应写入长期世界。
 
 ### Story
 
-只有未来值得追溯的事件、承诺、转折和后果进入 story。
+未来值得追溯的事件、承诺、转折与后果进入 story。
 
 ### Memory
 
-只保存高价值压缩与恢复线索，不追求逐字完整。
+只保存高价值恢复线索，不追求逐字完整。
 
 ### Source
 
-单局演化不得反向改写 reusable source。
+单局演化不得静默反向改写 reusable source。
 
-### Plugin Runtime State
+### UI / Plugin Runtime State
 
-插件自身临时 UI / operational state 不自动成为 game truth；若某个插件产生长期游戏事实，应写回对应 game Owner，而不是把插件 cache 变成第二事实源。
+UI / plugin cache 不自动成为 game truth。
 
 ---
 
 ## 11. Read / Context Strategy
 
-默认恢复路径：
+默认恢复：
 
 ```text
-当前 game README
-→ state/CURRENT.md
+current game README
+→ state/CURRENT
 → recent / unresolved memory
-→ 本回合直接相关 state / story
-→ 必要 source asset
-→ 更旧历史按需追溯
+→ directly relevant state / story
+→ necessary source assets
+→ older history on demand
 ```
-
-World Core 每轮必读的是**必要规则与必要当前上下文入口**，不是每轮重载全部仓库。
 
 原则：
 
@@ -404,42 +510,43 @@ Game History Growth
 != Agent Context Growth
 ```
 
+World Core 每轮只提供必要入口与语义，不全仓灌入。
+
 ---
 
-## 12. Consistency Model
+## 12. Consistency / Reliability Model
 
 第一阶段不追求数据库事务级一致性。
 
-Agent 在重要写入后应做轻量语义自检，例如：
+Agent 可做轻量语义自检：
 
-- state 是否明显自相矛盾；
+- state 是否明显矛盾；
+- dynamic durable entity 是否完全不可恢复；
 - memory 是否把旧状态当 current；
-- story 是否错误伪装成当前状态；
-- 新实体是否完全不可恢复；
-- library 是否被单局演化污染。
+- story 是否错误伪装成 current；
+- Source 是否被单局污染。
 
-一次可见错误优先修正 / 重答 / Restore。
+一次可见错误优先修正 / Regenerate / Restore。
 
-只有这些问题反复、难以靠模型或低成本恢复解决，才引入 validator / atomic writer / structured state。
+真实重复失败再考虑 validator / atomic writer / structured state。
 
 ---
 
 ## 13. Tool Boundary
 
-`tools/` 不是 The World 插件层的替代物。
-
 ### Product-value Tool / Mechanic
 
-如果确定性能力本身构成游戏机制，例如 dice、距离计算、战斗解析，它可以作为某个 RPG 插件的底层能力进入，不需要先证明模型失败。
+如果确定性能力本身构成游戏机制，例如 dice、距离计算、战斗解析，可以进入对应 RPG Plugin，不需要先证明模型失败。
 
 ### Preventive / Reliability Tool
 
-如果能力主要用于防止模型或文件出错，例如 validator、duplicate detector、atomic write，则默认满足：
+若能力主要用于防错，默认满足：
 
 1. 失败真实发生；
 2. 反复出现或代价明显；
-3. 程序能比模型自检 / Restore 更窄、更可靠地解决；
-4. 不显著损害 GM 自由、玩家自由和游戏流畅度。
+3. 模型自检 / Restore 已不足；
+4. 程序可以更窄、更可靠解决；
+5. 不显著损害 GM 与玩家自由。
 
 ---
 
@@ -447,62 +554,73 @@ Agent 在重要写入后应做轻量语义自检，例如：
 
 ### Trigger A — File Split
 
-真实文件规模导致恢复、冲突或检索明显变差。
+真实规模导致恢复 / 冲突 / 检索变差。
 
 ### Trigger B — Structured Game Data
 
-某类机制需要高频精确计算 / 查询，Markdown 成为主要摩擦源。
+某机制需要高频精确计算 / 查询，Markdown 成为主要摩擦。
 
 ### Trigger C — Guardrail
 
-同类模型 / 状态错误反复破坏体验，Undo / 修正成本已经不再低廉。
+同类错误反复破坏体验，Recovery 成本不再低廉。
 
 ### Trigger D — Database / Service
 
-真实出现复杂查询、原子性、并发、规模或性能问题，且更窄方案无法解决。
+出现真实复杂查询、原子性、并发或性能需求，且更窄方案无法解决。
 
 ### Trigger E — Experience Plugin
 
-World Core 最小纵向成立后，UI / Map / Mechanics 等如果预计能明显增强游戏化与沉浸感，可以直接进入 Reality Gate B；它们由**产品价值**而不是错误证据驱动。
+UI / Map / Mechanics 预计能明显提升游戏价值时，可直接进入产品路线。
 
 ### Trigger F — DSH Integration Adaptation
 
-DSH Developer Preview 发生 breaking change 时，优先迁移 The World integration layer，不让 game-local data 语义跟随上游内部结构漂移。
+DSH breaking change 时迁移 integration layer，不让 game data 语义跟随内部结构漂移。
 
 ---
 
 ## 15. Architecture Non-goals
 
-Stage 0 明确不追求：
+Stage 0 不追求：
 
 - 独立 Agent Runtime；
-- 自建通用 Provider / Model 层；
+- 自建 Provider / Model 层；
 - 完整 ECS / universal world OS；
 - 万能资产 Protocol / DSL；
 - 预先枚举所有 entity type；
-- 自动连续后台全世界模拟；
-- 多租户 / 云平台；
+- 自动连续全世界模拟；
 - 为理论错误设计完整审批 / typed mutation 平台；
-- 为 DSH 当前内部实现做深 fork。
+- DSH core 深 fork。
 
 ---
 
-## 16. Architecture Reality Gates
+## 16. Current Reality Route
 
-### Gate A — World Core Viability
+```text
+Product Definition Gate PASS
+        ↓
+TW-00.5 Bare DSH Capability Probe   ← CURRENT
+        ↓
+Baseline Evidence
+        ↓
+Extract Real Gaps
+        ↓
+TW-01 Minimal World Core
+        ↓
+Reality Gate A
+        ↓
+RPG Experience / Mechanics Plugin
+        ↓
+Reality Gate B
+```
 
-架构只有在以下真实成立时才继续扩张：
+TW-00.5 当前仍需要完成：
 
-- 游戏真的让玩家想继续；
-- World Core 不明显降低 GM 能力；
-- 全新 DSH Session 可以恢复同一个世界；
-- 世界存在长期因果与离屏变化；
-- Agent 自主维护工作区，玩家主要负责玩。
+- 多场景长期连续性；
+- Source 角色卡；
+- Source Fidelity；
+- 历史 / 题材事件与 history divergence；
+- off-screen evolution；
+- delayed consequences；
+- 完全全新 DSH Session 恢复。
 
-### Gate B — RPG Specialization Value
-
-Gate A 通过后，至少一个 RPG 专用插件应证明：
-
-> DSH 插件体系能够让 The World 从“Agent 聊天式 RPG”明显向“真正游戏体验”前进，而无需重造 Agent Runtime。
-
-当前下一步：**TW-01 First Real Vertical**。
+当前 Architecture 不应把 Bare DSH 偶然生成的 `save/` 文件布局直接复制成 TW-01 产品结构；只吸收被真实证据证明有价值的语义与缺口。
