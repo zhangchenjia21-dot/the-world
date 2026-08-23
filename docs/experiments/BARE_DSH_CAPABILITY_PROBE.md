@@ -62,6 +62,22 @@ World / GM owns Consequence
 
 当前只说明部分软性 RPG 机制可能适合自然语言 adjudication；不据此否定未来 deterministic mechanics。
 
+### 5. 玩家自身 durable state 维护较稳定
+
+在最新 TEST checkpoint `cfa88b8d21152647bc6733303bdc588a5a926e14` 中，DSH 能持续把玩家的：
+
+- 新技能；
+- 战斗风格萌芽；
+- 信条萌芽；
+- 健康变化；
+- 疲劳 / 饥饿；
+- 当前地点；
+- 系统兑换结果；
+
+写回 `player_character.md`。
+
+这说明当前主要问题不是“Agent 完全不会持久化”，而是不同类型 durable facts 的维护稳定性存在明显差异。
+
 ---
 
 ## 已观察产品缺口
@@ -106,19 +122,51 @@ UI 应是 game truth 的可视化 / 交互投影，不成为第二事实源。
 
 ### Gap 04｜动态遭遇 NPC 没有可靠进入长期记录
 
-来源：TEST 分支当前状态，观察到玩家在雪夜破庙场景中已经与“老卒”发生实际交集；聊天中进一步出现：
+该缺口已经从“单次观察”升级为**重复出现的真实持久化失败**。
+
+#### 第一轮证据
+
+玩家在雪夜破庙场景中与“老卒”发生实际交集，聊天中进一步出现：
 
 - `【获得潜在同伴：老卒（未命名）】`；
 - 关系从友善向信任倾向发展；
 - 已建立军旅经验、近身搏斗、陈留官场知识、左腿旧伤等持续性事实。
 
-但最新持久状态中：
+但当时：
 
 - `npc_relations.md` 仍显示“已结识 NPC：（暂无）”；
-- 最近一次 Git 变更只更新 `session_log.md`；
 - “潜在同伴”及其关系、能力、伤情没有进入长期 NPC 状态。
 
-这不是“该 NPC 不够重要”可以解释掉的问题，因为他已经产生了未来可能影响世界判断和玩家关系的 durable facts。
+#### 最新重复证据
+
+TEST checkpoint `cfa88b8d21152647bc6733303bdc588a5a926e14` 相对上一 checkpoint 只修改了：
+
+- `save/player_character.md`；
+- `save/session_log.md`。
+
+此时 durable NPC facts 已明显增加：
+
+- **周砚**：已被玩家救下，形成“救命之恩”；
+- **老卒**：已负伤，并明确“愿意跟随琛迦”；
+- **陈三**：已被重伤、俘虏并关押县寺，后续审案仍相关；
+- **刀疤**：逃走，去向不明，具备潜在后续 consequence；
+- **胖子**：逃走，去向不明。
+
+然而 `save/npc_relations.md` 仍完全未更新，继续显示：
+
+```text
+## 已结识 NPC
+
+（暂无）
+```
+
+因此已经可以排除“只是老卒尚不重要”的解释。
+
+当前更精确的失败模式是：
+
+> **Bare DSH 会稳定维护玩家自身状态和主线 session log，但对运行中动态生成 / 遭遇的 NPC durable state 存在系统性漏记倾向。**
+
+这属于 World Core 候选真实需求，而不是单纯 UI polish。
 
 #### 当前产品语义
 
@@ -182,7 +230,8 @@ UI 展示必须遵守玩家知识边界：不能因为后台存在 NPC 的隐藏
 
 ## 当前实验纪律
 
-- 不因为单次遗漏立即建设 Schema / Validator；
-- 继续观察该类 NPC persistence omission 是否重复出现；
-- 但 Persistent World 的产品语义已经明确：动态 game-local NPC 不能因为不是 Source / 名人而天然排除在长期世界之外；
-- 后续 TW-01 应至少验证 World Core 是否能以极薄的方式帮助 Agent 稳定识别此类 durable entity，而不降低 GM 自由度和文笔表现。
+- 不因为该失败已经重复出现就直接建设 Schema / Validator；
+- 现在已有足够证据把“动态 durable entity 识别与写回”列入 TW-01 World Core 候选 Required Behavior；
+- 首选仍是极薄的语义提醒 / 协调机制，而不是 typed mutation 或审批流水线；
+- 后续继续观察除 NPC 外，地点、势力、承诺、任务等运行中动态实体是否也出现相同的 selective persistence bias；
+- 任何修复必须继续保护 Bare DSH 当前表现良好的文笔、主动性、GM Authority 与自然机制 adjudication。
