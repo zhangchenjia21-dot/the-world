@@ -7,31 +7,54 @@
 
 `the-world` 是一个以 **DeepSeek Harness（DSH）为 Reference Host** 的 Agent-native 长期 RPG 项目。
 
-当前产品方向已通过 Product Definition Gate：
+当前 canonical stack：
 
 ```text
 DeepSeek Harness
 +
-World Core 游戏模式
+World Core RPG Game Mode
 +
-持久世界工作区
+Persistent World Workspace
 +
-RPG 专用插件
+RPG Experience / Mechanics Plugins
 ```
 
 The World 默认不重造独立 Agent Runtime，也不得自动继承 SillyTavern 的 Runtime、数据库、typed mutation、协议或历史约束。
 
+当前阶段：
+
+```text
+Product Definition Gate PASS
+↓
+TW-00.5 Bare DSH Capability Probe   ← CURRENT
+↓
+TW-01 Minimal World Core
+↓
+Reality Gate A
+↓
+RPG Experience / Mechanics Plugin
+↓
+Reality Gate B
+```
+
 ## 2. 当前产品原则
 
-正式工作不得偏离以下 current product decisions：
+正式工作不得偏离：
 
 - **Persistent World + Player Spotlight**：世界独立存在，但 GM 主动把有意义的舞台组织到玩家身边；
-- **Unlimited Attempt, Consequence-bound World**：玩家可以尝试任何游戏内行为，世界负责给出可信后果；
-- **Player Agency**：Agent 不替玩家做未输入的关键选择、承诺或不可逆行动；
-- **Model Freedom**：默认不以预防模型错误为理由建设大规模审批、权限、typed mutation 或严格状态机；
-- **Recovery First**：低成本错误优先撤回、重答、修正、Restore；
+- **Persistent != Fully Simulated**：不要求所有实体持续逐回合 tick；
+- **Durable Identity**：重要性决定注意力 / 模拟资源，不决定已经形成 durable identity 的实体是否存在；
+- **Unlimited Attempt, Consequence-bound World**：玩家可以尝试任何游戏内行为，世界负责可信后果；
+- **Player Agency = Authorization Boundary**：GM 不得把宽泛意图扩大成未授权的重大承诺 / 路线 / 不可逆选择；
+- **Configurable Protagonist Control**：允许 Full Control / Light Delegation / Narrative Delegation 等操控粒度；
+- **Meaningful Choice Boundary**：`Compress dead time; stop at meaningful choice.`；
+- **Model Freedom**：默认不因理论错误建设大规模审批、typed mutation 或严格状态机；
+- **Recovery First**：低成本错误优先 Undo / Regenerate / 修正 / Restore；
 - **Player Plays, Agent Maintains**：玩家主要负责玩，Agent 负责工作区维护；
-- **DSH-native, not DSH-internal-coupled**：利用 DSH 正式插件 / capability seams，不把长期 game data 绑死到易变内部实现。
+- **Chat + UI**：Chat 展示机制事件，Persistent UI 承载机制当前状态；
+- **UI Truth Boundary**：UI 是 game truth 投影，不成为第二事实源；
+- **Hide Work Noise**：隐藏 Agent `think/read/write/tool` 噪音，但不限制 Agent 工作能力；
+- **DSH-native, not DSH-internal-coupled**：利用 DSH 正式 extension seams，不把长期 game data 绑死到易变内部实现。
 
 产品事实以 `docs/PRODUCT_SPEC_CURRENT.md` 为准。
 
@@ -42,14 +65,14 @@ The World 默认不重造独立 Agent Runtime，也不得自动继承 SillyTaver
 1. 用户当前明确指令；
 2. `docs/PRODUCT_SPEC_CURRENT.md`；
 3. `docs/ARCHITECTURE_CURRENT.md`；
-4. 当前 game 的 `state/` canonical facts；
-5. 当前 game 的 `story/` 与 `memory/`；
+4. 当前 game 的 canonical state；
+5. 当前 game 的 story / memory；
 6. `README.md`；
-7. `Vibe-Coding` current；
-8. `Skill` current；
+7. Bare DSH experiment evidence（仅用于实验事实，不覆盖 canonical product decisions）；
+8. 跨项目方法论 / Skill；
 9. 历史聊天、旧摘要、旧附件与模型记忆。
 
-跨项目通用方法与本项目明确产品裁定冲突时，以本项目 current Product Spec 为准。
+通用方法论与本项目明确产品裁定冲突时，以本项目 current Product Spec 为准。
 
 ## 4. 正式任务前读取
 
@@ -63,7 +86,11 @@ README.md
 → 当前 game / plugin / asset 的直接 Owner
 ```
 
-普通任务初始优先控制在 3–7 个入口，证据不足再扩大。
+实验相关再读取：
+
+`docs/experiments/BARE_DSH_CAPABILITY_PROBE.md`
+
+不要为了“更完整”每次全仓读取。
 
 ## 5. Freshness 与写回
 
@@ -71,32 +98,32 @@ README.md
 
 写回前重新取得目标文件当前 SHA；禁止用旧副本覆盖并行更新。
 
-发现新产品 / 架构决策后，不只“读到”，还要检查：
+发现新产品 / 架构决策后，不只在聊天中记住，还要检查是否需要写回：
 
-- Current Task；
+- Product Spec；
+- Architecture；
 - 正确 Owner；
-- game-local propagation；
-- Reality Gate；
-- 下一步路线。
+- Experiment Evidence；
+- README / roadmap。
+
+但不要把单次实验偶然行为直接提升成 canonical architecture。
 
 ## 6. Folder Ownership
 
 ### `docs/`
 
-项目级 current 产品与工作架构。
+项目级 current 产品、工作架构与实验事实。
 
 ### `plugins/`
 
-The World 面向 DeepSeek Harness 的 RPG 专用插件 Owner。
-
-包括：
+The World 面向 DSH 的 RPG 专用插件 Owner：
 
 - World Core；
 - RPG UI；
 - Map / Visualization；
-- Mechanics / Expansion plugins。
+- Mechanics / Expansion Plugins。
 
-这些能力可以由**产品价值**直接驱动，不要求先出现模型错误。
+产品价值型插件不要求先出现模型错误。
 
 ### `library/`
 
@@ -104,7 +131,7 @@ The World 面向 DeepSeek Harness 的 RPG 专用插件 Owner。
 
 ### `games/<game-id>/state/`
 
-当局 current world reality 的主要 canonical owner。
+当局 current world reality 的 canonical Owner。
 
 ### `games/<game-id>/story/`
 
@@ -114,60 +141,80 @@ The World 面向 DeepSeek Harness 的 RPG 专用插件 Owner。
 
 ### `games/<game-id>/memory/`
 
-上下文压缩 / retrieval layer。可重写，不覆盖 `state/` current truth。
+上下文压缩 / retrieval layer。可重写，不覆盖 current truth。
 
 ### `games/<game-id>/saves/`
 
-明确恢复点 / 分支 / snapshot 的语义 Owner。
+明确恢复点 / branch / snapshot 的语义 Owner。
 
 ### `tools/`
 
 窄而确定性的支持工具。
 
-若主要目的是修复模型 / 文件错误，默认由真实重复失败驱动；若是游戏机制的一部分，可被 `plugins/` 消费。
+若主要用于防模型 / 文件错误，默认由真实重复失败驱动；若是游戏机制的一部分，可被 `plugins/` 消费。
 
 ## 7. World Core Boundary
 
 World Core 是 TW-01 Shared Foundation。
 
-它可以：
+Bare DSH Probe 后，World Core 默认从**薄协调层**出发，而不是大型 RPG Runtime。
 
-- 在游戏模式中稳定提供每轮必要上下文；
-- 提供 GM / 世界 / Player Agency 原则；
-- 定义文件读取与 durable write 职责；
-- 帮助 Agent 恢复游戏、选择相关上下文并维护工作区。
+当前真实候选职责：
 
-它默认不应变成：
+- game entry / continue / fresh-session recovery；
+- 必要 GM / world / workspace context；
+- dynamic durable entity / relationship / commitment / consequence 识别与写回；
+- current protagonist control mode / authorization context；
+- context retrieval 入口；
+- necessary recovery / save coordination。
+
+World Core 默认不应变成：
 
 - narrative approval gate；
 - typed mutation 强制流水线；
-- “程序批准后事实才能存在”的通用 Commit Engine；
+- “程序批准后事实才能存在”的 Commit Engine；
 - 玩家行为白名单；
-- 模型创作范围白名单。
+- 模型创作白名单；
+- 每回合固定写全部 Owner；
+- 全世界逐实体模拟器。
 
-如果未来真实失败证明需要某种约束，只增加最窄边界。
+如果真实失败证明需要约束，只增加最窄边界。
 
 ## 8. Source 与 Game-local 隔离
 
 - `library/` 是可复用起点；
 - 单局新增人物、地点、关系、历史分叉进入当前 game；
 - Source 更新是否影响已有 game 必须显式决定；
-- 历史世界只定义起始 canonical condition，游戏开始后的 game-local reality 优先；
-- 已发生的历史分叉不得为了贴回 Source 被静默修正。
+- Source / history 只定义开始前的 canonical condition；
+- 游戏开始后的 game-local reality 优先；
+- 已发生分叉不得为了贴回 Source 被静默修正。
 
-## 9. Persistent World & Player Spotlight
+如果世界资产混合正史 / 演义 / 原创，优先从 World Pack / Source 语义明确口径；不要由模型自行假定“历史真实性”的标准。
+
+## 9. Persistent World & Durable Identity
 
 ```text
 Persistent != Fully Simulated
 ```
 
-Agent 可以让玩家视野外的 NPC、势力和事件继续演化，但不要求全世界逐实体 tick。
+Agent 可以让玩家视野外 NPC、势力和事件继续演化，但不要求全世界逐实体 tick。
 
-GM 应根据世界因果、人物目标、时间和玩家相关性判断哪些变化值得发生并重新进入玩家体验。
+一个动态实体一旦产生会影响未来的 durable fact，例如：
 
-世界不围绕玩家存在；叙事注意力优先服务玩家的游戏体验。
+- 关系变化；
+- 承诺 / 债务；
+- 同伴 / 敌对；
+- 持续伤情；
+- 未来 hook / consequence；
+- 重要已知信息；
 
-## 10. Player Agency & Attempt
+就应进入 game-local reality。
+
+> **Importance controls attention, not existence.**
+
+未命名不等于无身份。
+
+## 10. Player Attempt & Agency
 
 玩家可以尝试任何游戏内行为，程序不得仅因为其疯狂、愚蠢、危险或不符合推荐路线而拒绝。
 
@@ -177,7 +224,34 @@ World owns Consequence
 GM owns Playability of the Consequence
 ```
 
-Agent 不得替玩家说话、答应承诺、做关键决定或执行未表达的不可逆玩家行动。
+### Authorization Boundary
+
+GM 不得从一个宽泛玩家意图，自动推导出未授权的：
+
+- 阵营加入；
+- 重大承诺；
+- 招募 / 接受投效；
+- 重大资源使用；
+- 不可逆路线；
+- 高风险暴露；
+- 其它 meaningful choice。
+
+但这不等于禁止 GM 替主角处理所有小动作。
+
+### Configurable Control
+
+允许：
+
+- Full Control；
+- Light Delegation；
+- Narrative Delegation；
+- 玩家自然语言临时扩大 / 缩小授权。
+
+共同原则：
+
+> **Compress dead time; stop at meaningful choice.**
+
+玩家可随时接管。
 
 ## 11. Model Freedom & Recovery
 
@@ -198,31 +272,46 @@ Prefer Recovery over Prevention
 
 不要因为理论风险，把 GM 创意、世界主动性和玩家自由一起锁死。
 
-## 12. Product-value Capability vs Failure-driven Guardrail
+## 12. Chat / UI Boundary
 
-新增程序化能力前先分类。
+正式体验原则：
+
+> **Chat 展示机制事件；UI 承载机制当前状态。**
+
+Persistent UI 典型 surfaces：
+
+- System；
+- Quest；
+- Character / Relationship；
+- Map；
+- Faction / Reputation；
+- Inventory / Economy；
+- Save / Restore；
+- Protagonist Control Mode。
+
+UI 从 canonical state 投影，不自行维护第二套长期事实。
+
+DSH Agent execution traces 默认应由 RPG UI 折叠 / 隐藏，同时保留 debug 入口。
+
+## 13. Product-value Capability vs Failure-driven Guardrail
 
 ### Product-value Capability
 
-例如 RPG UI、Map、Combat、Politics、Economy、Character Progression。
-
-若它直接增加沉浸、交互、机制深度或传统 RPG 体验，可以按产品路线开发，不需要“先失败”。
+RPG UI、Map、Combat、Politics、Economy、Character Progression 等若直接增加游戏价值，可直接按产品路线开发。
 
 ### Failure-driven Guardrail
 
-例如 consistency validator、typed mutation、atomic writer、schema checker、duplicate detector。
-
-若主要目的是防止错误，至少确认：
+validator、typed mutation、atomic writer、schema checker、duplicate detector 等若主要用于防错，至少确认：
 
 1. 真实失败已经发生；
 2. 失败反复或代价明显；
 3. Undo / 修正 / Agent 自检不够；
 4. 最窄确定性方案能解决；
-5. 不显著损害核心游戏体验。
+5. 不显著损害核心体验。
 
 禁止从“以后可能出错”直接推导重型 Runtime / DB / Protocol。
 
-## 13. Context Growth
+## 14. Context Growth
 
 ```text
 Game History Growth
@@ -242,11 +331,12 @@ game README
 
 World Core 每轮必读不等于每轮全仓读取。
 
-## 14. Durable Change Propagation
+## 15. Durable Change Propagation
 
 重要变化后判断是否影响：
 
-- state；
+- current state；
+- dynamic entity state；
 - story；
 - unresolved hook；
 - memory；
@@ -254,9 +344,9 @@ World Core 每轮必读不等于每轮全仓读取。
 
 只更新真正受影响的 Owner。
 
-禁止让 memory 长期把旧状态当 current，也禁止让 plugin cache 成为第二 game truth。
+不要为了“看起来完整”机械改写全部文件。
 
-## 15. Markdown-first
+## 16. Markdown-first
 
 第一阶段：
 
@@ -266,19 +356,23 @@ World Core 每轮必读不等于每轮全仓读取。
 
 格式服务产品，不反过来定义产品。
 
-## 16. 用户不是 QA Bot
+## 17. 用户不是 QA Bot
 
 Agent 应主动完成：
 
 - 搜索与恢复；
-- 去重、旧值、断链检查；
 - Owner / propagation 复查；
-- current state / memory / story 的明显一致性检查；
+- current state / memory / story 明显一致性检查；
+- dynamic durable entity 是否可恢复；
 - 修改后的 focused validation。
 
-用户主要负责玩家行动、主观游戏体验和真正的产品裁定。
+用户主要负责玩家行动、主观体验和真正的产品裁定。
 
-## 17. Reality Gates
+## 18. Reality Gates
+
+### TW-00.5 Bare DSH Probe
+
+当前先继续测出 Bare DSH 的自然上限，不在实验期间提醒 DSH 修我们已经发现的问题。
 
 ### Gate A — World Core Viability
 
@@ -287,30 +381,30 @@ Agent 应主动完成：
 - 玩家想继续玩；
 - GM 质量没有明显下降；
 - 全新 DSH Session 能恢复同一个世界；
-- 存在真实长期因果与离屏变化；
+- 动态人物 / 关系 / 承诺具有长期连续性；
 - 玩家不用维护后台文件。
 
 ### Gate B — RPG Specialization Value
 
-Gate A 通过后，至少一个 RPG 专用插件证明明显的游戏化 / 沉浸 / 机制增益。
+Gate A 后，至少一个 RPG 专用插件证明明显游戏化 / 沉浸 / 机制增益。
 
-当前下一步：`TW-01 / First Real Vertical`。
+当前下一步：`继续 TW-00.5 → TW-01 Minimal World Core`。
 
-## 18. Public Repository Safety
+## 19. Public Repository Safety
 
 本仓库是 public。
 
 禁止提交秘密、凭证、私密个人内容、私密聊天原文，以及无权公开的版权 / 保密材料。
 
-## 19. 跨项目上游
+## 20. 跨项目上游
 
 开发方法论：`https://github.com/zhangchenjia21-dot/Vibe-Coding`
 
 执行 Skill：`https://github.com/zhangchenjia21-dot/Skill`
 
-使用时读取其 `main` current，但不得让通用方法论覆盖 The World 已明确的产品裁定。
+读取其 `main` current，但不得让通用方法论覆盖 The World 已明确的产品裁定。
 
-## 20. 结构扩展规则
+## 21. 结构扩展规则
 
 当前优先 Owner：
 
@@ -320,4 +414,4 @@ docs / plugins / library / games / tools
 
 只有新职责无法合理归入现有 Owner 时才新增根目录。
 
-> 迁移经过验证的方法论，不迁移与本项目目标无关的工程仪式。
+> **迁移经过验证的方法论，不迁移与本项目目标无关的工程仪式。**
