@@ -166,9 +166,10 @@ export function buildRecoveryInjection({ game, source, current, recent, composit
 
 export function buildMaintenanceText({ game }) {
   return [
-    '[World Core 回合维护 — 不要输出面向玩家的内容]',
+    '[World Core 回合维护 — 静默执行]',
     '本轮叙事已经结束。只检查是否产生了未来仍需存在的 durable change。不要继续剧情、不要推进时间，也不要调用 `ask_user_question`。',
     `有 durable change 时更新 ${game.dir}/state/CURRENT.md；值得长期追溯的事件补入 story/LEDGER.md；必要时刷新 memory/RECENT.md。`,
-    '没有 durable change 就不要写文件。完成后结束本轮。'
+    '没有 durable change 就不要写文件。',
+    '完成维护后不要输出任何自然语言、完成通知、文件清单或“本轮结束”等文字；直接静默结束 maintenance step。'
   ].join('\n')
 }
