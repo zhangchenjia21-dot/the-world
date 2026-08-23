@@ -1,106 +1,97 @@
 # The World
 
-> 一个以 **Agent + 文件系统** 为核心的长期 AI 世界 / RPG 实验项目。
+> 一个以 **DeepSeek Harness + RPG 专用插件 + 持久世界工作区** 为核心的 Agent-native 长期 RPG 项目。
 
-**当前状态：Stage 0 / Experimental Spike**  
-**当前目标：先证明最小方案是否真的能长期玩，再决定要不要继续产品化。**
+**当前状态：Stage 0 / Product Definition Gate PASS**  
+**下一步：TW-01 / First Real Vertical**
 
-`the-world` 的出发点很简单：如果现代 Agent 已经能够读取、搜索、编辑本地文件，并自行维护长期任务上下文，那么一个长期 AI 世界未必需要先建设完整的数据库 Runtime、复杂协议、重型状态机和大量中间层。
+The World 不自己重造一套 Agent Runtime。它以 **DeepSeek Harness（DSH）** 为 Reference Host，利用 DSH 的 Agent、Provider、工具、Session、插件和 UI 扩展基础，把通用 Agent 系统性地游戏化。
 
-这个仓库将验证另一条路线：
+产品核心不是“几个文件夹”，而是：
 
 ```text
-优秀 Agent 主持能力
+DeepSeek Harness
 +
-清晰的文件夹职责
+World Core 游戏模式
 +
-长期状态 / 剧情 / 记忆 / 存档
+真实持续的世界
 +
-少量真正必要的确定性工具
+长期 state / story / memory / saves
++
+RPG UI / Map / Mechanics 等专用插件
 =
-可持续游玩的长期 AI 世界
+可长期游玩的 AI RPG 游戏环境
 ```
 
-本项目不是当前 SillyTavern 项目的替代品。SillyTavern 继续沿原路线验证完整游戏产品；`the-world` 是一条并行、轻量、可证伪的 Agent-native 路线。
+本项目与 SillyTavern 并行，不自动继承其 Runtime / DB / typed mutation / protocol 路线。
 
 ---
 
-## 1. Primary Purpose
+## 1. Product Core
 
-让一个具备文件读写能力的通用 Agent 能够：
+### Primary Purpose
 
-- 读取世界包、角色卡、机制与资料；
-- 主动主持游戏，而不是等待玩家自己编剧情；
-- 长期维护人物、场景、势力、物品、关系和世界变化；
-- 记录关键剧情、未决线索与长期记忆；
-- 在长会话和跨会话后恢复到正确的游戏现场；
-- 在需要时保存、恢复和分叉一局游戏；
-- 只在 Agent 明显不可靠的地方引入小型确定性工具。
+让 DeepSeek Harness 中的优秀模型成为一个能够长期主持、维护和恢复同一个持续世界的 AI GM，并通过 RPG 专用插件逐步获得传统游戏级的机制、可视化和沉浸体验。
+
+### Core Value
+
+- 真实持续、会积累历史的世界；
+- 跨全新 Agent Session 仍能继续；
+- 持续存在的人物、地点、关系、势力、承诺与后果；
+- 不明显牺牲优秀模型原有的创造力、主动性和自由度；
+- World Core 稳定承载游戏模式、上下文与工作区维护；
+- UI、地图、战斗、政治、经济等 RPG 插件可以直接增强游戏价值。
 
 ### Simple Baseline
 
-本项目最重要的现实基线是：
+```text
+DeepSeek Harness
++
+同一 Provider / Model
++
+简单长期 RPG 主持要求
++
+允许 Agent 自己按需使用文件
+```
 
-> 直接让一个优秀通用 AI 说“请主持一场长期 RPG”。
+The World 必须证明自己比这个基线更值得长期玩，而不是只证明 DSH 本身适合玩 RPG。
 
-`the-world` 只有在**不明显损害主持质量、创意、主动性与自由度**的前提下，提供更好的长期连续性，才算有价值。
+完整 current 产品事实见 [`docs/PRODUCT_SPEC_CURRENT.md`](docs/PRODUCT_SPEC_CURRENT.md)。
 
 ---
 
-## 2. 核心设计原则
+## 2. 核心游戏原则
 
-### 2.1 Agent 是主持人与主要 Orchestrator
+### Persistent World + Player Spotlight
 
-项目不预设必须自己重建一个低配 Agent Runtime。
+> **世界独立存在，叙事聚光灯照向玩家。**
 
-默认：
+世界不会因为玩家没有关注就停止存在，但 GM 应主动把有意义、有戏剧性的冲突、人物和机会尽量组织到玩家能够感知和参与的舞台上。
 
-```text
-Agent
-= GM + Planner + Context Reader + State Maintainer
-```
+`Persistent != Fully Simulated`：不要求所有 NPC 和势力每回合机械 tick。
 
-程序只负责 Agent 不适合可靠承担的窄职责，例如确定性随机数、严格数值计算、格式校验、快照或一致性检查。
+### Unlimited Attempt, Consequence-bound World
 
-### 2.2 文件系统是第一版长期记忆层
-
-Markdown 优先；只有当机器校验或计算真正需要时才引入 JSON / YAML / 脚本。
-
-不要因为“以后可能复杂”就提前引入数据库。
-
-### 2.3 Source 与 Game-local Reality 分离
-
-`library/` 是可复用源资产；单局游戏不得反向污染它。
-
-游戏中的新增人物、地点、关系和演化结果属于 `games/<game-id>/`。
-
-### 2.4 一个事实只设一个主要 Owner
-
-- 当前世界事实 → `state/`
-- 重要剧情与节点 → `story/`
-- 上下文压缩与长期记忆 → `memory/`
-- 恢复点 → `saves/`
-
-允许上层文件做摘要，但不得形成互相漂移的第二套权威事实。
-
-### 2.5 失败驱动工具化
-
-先让 Agent 做。
-
-只有真实试玩证明某类错误持续发生，才增加工具或约束：
+玩家可以尝试任何游戏内行为。
 
 ```text
-真实失败
-→ 分类根因
-→ 最窄工具 / 校验器
-→ 再试玩
+玩家决定：我尝试什么
+世界决定：产生什么后果
+GM 负责：让后果尽可能继续值得玩
 ```
 
-而不是先假设所有风险，再建设完整 Runtime。
+玩家拥有行动尝试权，不拥有结果控制权。
 
-### 2.6 用户不是 QA Bot
+### Model Freedom + Cheap Reversibility
 
-Agent 应主动完成搜索、去重、旧值检查、状态传播与一致性复查；用户主要负责角色行动、游戏体验以及真正需要人类裁定的产品方向。
+The World 默认不为了防止理论模型错误，预建审批器、typed mutation、重型状态机或大规模 Guardrail。
+
+> **Freedom Before Prevention**  
+> **Prefer recovery over prevention**
+
+低成本错误优先通过撤回、重答、修正、Restore 解决。
+
+World Core 提供稳定的游戏模式、必要上下文和文件职责，但不是限制 GM 创造力的控制流水线。
 
 ---
 
@@ -115,163 +106,151 @@ the-world/
 │  ├─ PRODUCT_SPEC_CURRENT.md
 │  └─ ARCHITECTURE_CURRENT.md
 │
-├─ library/
+├─ plugins/
 │  └─ README.md
-│     # 逻辑分类：worlds / characters / mechanics / lore
+│
+├─ library/
+│  ├─ worlds/
+│  ├─ characters/
+│  ├─ mechanics/
+│  └─ lore/
 │
 ├─ games/
 │  ├─ README.md
 │  └─ _template/
 │     ├─ README.md
 │     ├─ state/
-│     │  └─ CURRENT.md
 │     ├─ story/
-│     │  └─ README.md
 │     ├─ memory/
-│     │  └─ README.md
 │     └─ saves/
-│        └─ README.md
 │
 └─ tools/
    └─ README.md
 ```
 
-### `library/` — 可复用源资产
+### `plugins/`
 
-逻辑上分为：
+The World 面向 DeepSeek Harness 的 RPG 专用插件。
 
-- `worlds/`：世界包、时代背景、地理与世界锚点；
-- `characters/`：角色卡与可复用人物定义；
-- `mechanics/`：复杂机制、规则、判定说明；
-- `lore/`：资料库、设定、知识条目。
+- World Core：TW-01 Shared Foundation；
+- RPG UI / Map / Mechanics：后续产品体验层。
 
-这里保存“开始一局游戏之前就存在的源内容”。默认只读。
+这些能力可以由**产品价值**直接驱动。
 
-### `games/<game-id>/state/` — 当局 Canonical State
+### `library/`
 
-保存“这局游戏现在真实是什么样”。
+可复用 Source Assets。单局游戏不得反向污染。
 
-典型内容包括：
+### `games/<game-id>/state/`
 
-- 当前角色与关系；
-- 当前场景与地点；
-- 当前势力状态；
-- 物品、资源、承诺、任务；
-- 已正式进入本局世界的新实体；
-- 当前时间与其它持续状态。
+回答“这局现在真实是什么”，是 game-local current truth 的主要 Owner。
 
-### `games/<game-id>/story/` — 重要剧情与节点
+### `story/`
 
-保存：
+重要历史、转折、承诺、后果和 unresolved hooks。
 
-- timeline；
-- important events；
-- unresolved hooks；
-- promises / consequences；
-- 需要长期追踪的剧情节点。
+### `memory/`
 
-它不是逐字聊天日志，而是高价值剧情账本。
+上下文压缩 / retrieval layer，不是 current truth。
 
-### `games/<game-id>/memory/` — Agent 长期记忆
+### `saves/`
 
-保存为了跨长上下文恢复而形成的压缩记忆，例如：
+明确可恢复的游戏现场。
 
-- recent summary；
-- long-term summary；
-- NPC-specific memory；
-- 当前最值得重新加载的上下文索引。
+### `tools/`
 
-原则：**Game history growth != 每回合上下文增长。**
+窄而确定性的支持工具。若主要用于防模型错误，默认由真实重复失败驱动；若是游戏机制本身，可被 RPG 插件消费。
 
-### `games/<game-id>/saves/` — 恢复点
-
-保存明确的游戏恢复点、分支或快照元数据。
-
-第一阶段不预设具体实现必须是复制目录、Git tag、Git branch 还是脚本快照；先用真实试玩决定。
-
-### `tools/` — 窄而可靠的确定性能力
-
-只放经过真实失败证明值得程序化的工具。
-
-第一阶段允许这里几乎为空。
+完整 working architecture 见 [`docs/ARCHITECTURE_CURRENT.md`](docs/ARCHITECTURE_CURRENT.md)。
 
 ---
 
-## 4. 一局游戏的最小工作循环
+## 4. Core Player Journey
 
 ```text
-1. 选择 / 读取 library 中相关资产
-2. 从 games/_template 建立新 game
-3. Agent 读取当局 CURRENT + 必要 story / memory
-4. Agent 主持世界并响应玩家
-5. 产生 durable 变化时更新 state
-6. 出现重要剧情时更新 story
-7. 上下文开始变长时更新 memory
-8. 到重要恢复点时创建 save
-9. 下一回合按需读取，而不是全仓重载
+选择世界 / 角色
+↓
+开始游戏
+↓
+World Core 进入游戏模式
+↓
+自由游玩
+↓
+Agent 后台维护必要世界事实
+↓
+离开
+↓
+开启没有旧聊天上下文的新 DSH Session
+↓
+继续游戏
+↓
+自动恢复同一个世界
 ```
 
-一个普通回合不要求每次重写所有文件。只更新真正发生变化的 Owner。
+玩家主要负责玩，不负责手工维护状态表、memory 或项目文件。
 
 ---
 
-## 5. 当前不做什么
+## 5. Stage 0 Reality Gates
 
-Stage 0 / First Spike 默认不建设：
+### Gate A — World Core Viability
 
-- 完整 Web 游戏 Host；
-- 通用数据库 Runtime；
-- 复杂 typed mutation pipeline；
-- 插件协议 / Asset DSL；
-- 完整 Schema 平台；
-- 后台自主世界模拟；
-- 为所有潜在错误预建 Guardrail；
-- 为尚未出现的规模问题做平台化。
+必须真实证明：
 
-这些能力以后可以出现，但必须由真实需求或失败证据拉动。
+1. 玩家想继续玩；
+2. World Core 不明显降低 GM 能力；
+3. 全新 DSH Session 能恢复同一个世界；
+4. 玩家行为、NPC 行动和离屏变化具有长期因果；
+5. Agent 自主维护工作区，玩家不是 QA Bot。
 
----
+### Gate B — RPG Specialization Value
 
-## 6. 第一轮验证路线
+Gate A 通过后，至少用一个 RPG 专用插件证明：
 
-### TW-00 — Repository Bootstrap
-
-- 建立仓库规则、产品总纲、最小目录职责与游戏模板。
-
-### TW-01 — First Real Vertical
-
-- 导入一个真实世界包；
-- 导入一个真实主角 / 角色；
-- 建立第一局游戏；
-- 直接让 Agent 主持，不借助重型 Runtime。
-
-### TW-02 — Long-session Reality Check
-
-目标不是“文件都写对”，而是连续真实游玩后检查：
-
-- 主持体验是否仍然自然、有创意、主动；
-- 重要人物与关系是否还能正确恢复；
-- 关键承诺与后果是否会丢；
-- 场景 / 势力 / 世界状态是否漂移；
-- 记忆压缩是否真的控制上下文；
-- Save / Restore 是否足够可靠。
-
-### TW-03 — Failure-driven Tooling
-
-只针对 TW-02 真实暴露的重复失败增加工具、格式或校验。
-
-### TW-04 — Productization Decision
-
-基于真实体验决定：
-
-- 继续保持纯 Agent workspace；
-- 增加薄 UI / Launcher；
-- 增加少量本地服务；
-- 或证明某些 Runtime 能力确实不可替代。
+> DSH 插件体系可以让体验从“在 Agent 里聊 RPG”明显推进为“更像真正的 RPG”，而不用重造 Agent Runtime。
 
 ---
 
-## 7. Project Truth & AI Collaboration
+## 6. TW-01｜First Real Vertical
+
+第一局采用：
+
+> **184 年前后真实三国世界初始条件 + 原创玩家角色。**
+
+历史资料只定义起始世界；游戏开始后的 game-local reality 优先。玩家可以改变历史，已经发生的分叉不得为了贴回史实被自动修正。
+
+第一条纵向优先验证：
+
+- 原创玩家 / NPC；
+- 持续关系或承诺；
+- 多地点；
+- 离屏世界变化；
+- 延迟后果；
+- 历史分叉；
+- 全新 Session 恢复。
+
+这是语义压力，不是固定回合数 KPI。
+
+---
+
+## 7. 当前明确不做
+
+Stage 0 不预先建设：
+
+- 独立 Agent Runtime；
+- 通用 Provider 层；
+- 复制 SillyTavern Runtime；
+- 万能 Schema / Asset DSL / Protocol；
+- 数据库事务平台；
+- 全量后台世界模拟；
+- 为理论错误设计的大规模预防性 Guardrail；
+- 为 DSH 内部实现做深 fork。
+
+DeepSeek Harness 当前处于 Developer Preview。The World 采用 **DSH-native, not DSH-internal-coupled**：上游 API 可以迁移，长期世界与存档语义尽量保持稳定可移植。
+
+---
+
+## 8. Project Truth & AI Collaboration
 
 正式工作优先读取：
 
@@ -280,38 +259,30 @@ README.md
 → AGENTS.md
 → docs/PRODUCT_SPEC_CURRENT.md
 → docs/ARCHITECTURE_CURRENT.md
-→ 当前 game 的 README / state
-→ 当前任务直接相关文件
+→ 当前 game / plugin / asset 的直接 Owner
 ```
 
-跨项目开发方法、Skill 与 AI 协作规范不复制进本仓库作为第二事实源；需要时读取其 GitHub `main` 当前版本：
+跨项目方法论与 Skill 按需读取 current：
 
 - [`zhangchenjia21-dot/Vibe-Coding`](https://github.com/zhangchenjia21-dot/Vibe-Coding)
 - [`zhangchenjia21-dot/Skill`](https://github.com/zhangchenjia21-dot/Skill)
 
-详细仓库级规则见 [`AGENTS.md`](AGENTS.md)。
-
 ---
 
-## 8. Public Repository Safety
+## 9. Public Repository Safety
 
 本仓库当前是 **public**。
 
-不得提交：
-
-- API Key、Token、Cookie、密码或私钥；
-- 私密聊天原文；
-- 不希望公开的个人信息；
-- 受版权、保密或访问权限限制且无权公开的原始资料。
-
-真实游戏内容在进入仓库前，也应先确认其适合公开。
+不得提交 API Key、Token、Cookie、密码、私钥、私密聊天原文、不希望公开的个人信息，以及无权公开的版权 / 保密材料。
 
 ---
 
-## 9. 当前判断
+## 10. Current Decision
 
-`the-world` 现在不是一套已经证明正确的新架构，而是一个需要尽快被真实游玩证伪或证实的实验。
+**Product Definition Gate：PASS（2026-08-23）**
 
-最重要的原则只有一句：
+现在不再继续扩展抽象产品讨论或预设计平台能力。
 
-> **先让 Agent 和简单文件系统证明自己能不能把世界长期玩起来；只有真实失败，才有资格要求更多架构。**
+下一步：
+
+> **TW-01｜用 DeepSeek Harness + 最小 World Core + 三国原创玩家真实开玩。**
