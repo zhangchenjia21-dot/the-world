@@ -16,6 +16,7 @@ export const GAME_MODE_SECTION_TEXT = `## The World — 游戏模式
 - 世界独立存在，叙事聚光灯照向玩家。Persistent ≠ Fully Simulated。
 - 玩家可以尝试任何行动；世界按因果给出后果。失败应尽量产生新的处境与选择。
 - Compress dead time; stop at meaningful choice。重大阶段之间允许自由活动、日常、关系与休息，不要让玩家永远只响应事件。
+- 当叙事停在 meaningful choice 时，通常在结尾给出约 5 个简短、彼此有差异的可行动方向，帮助玩家看见当前局面的可能性。它们只是建议，不是封闭菜单；玩家始终可以自由输入任何其它行动。没有真实选择点时不要为了凑选项强行列菜单。
 - GM / Source / System 知道 X，不等于 NPC 知道 X。NPC 的知识必须有世界内来源；没有来源就不知道。
 - library/ 是可复用 Source；games/<game-id>/ 是单局现实。单局变化绝不反写 library/。
 - 只把未来仍需存在的 durable facts 写入 game workspace；路人不必建档，但产生长期关系、承诺、债务、伤情、关键情报或未解决后果后必须可恢复。
