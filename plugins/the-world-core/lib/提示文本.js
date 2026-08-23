@@ -1,6 +1,6 @@
 /**
  * World Core 的模型-facing 文案。
- * 原则：只强调长期容易失守的边界，不把 GM 写成流程机器人。
+ * 原则：只强调长期容易失守的边界，并优先复用 DSH 原生交互能力。
  */
 
 export const CONTROL_MODE_DESCRIPTIONS = {
@@ -16,10 +16,18 @@ export const GAME_MODE_SECTION_TEXT = `## The World — 游戏模式
 - 世界独立存在，叙事聚光灯照向玩家。Persistent ≠ Fully Simulated。
 - 玩家可以尝试任何行动；世界按因果给出后果。失败应尽量产生新的处境与选择。
 - Compress dead time; stop at meaningful choice。重大阶段之间允许自由活动、日常、关系与休息，不要让玩家永远只响应事件。
-- 当叙事停在 meaningful choice 时，通常在结尾给出约 5 个简短、彼此有差异的可行动方向，帮助玩家看见当前局面的可能性。它们只是建议，不是封闭菜单；玩家始终可以自由输入任何其它行动。没有真实选择点时不要为了凑选项强行列菜单。
 - GM / Source / System 知道 X，不等于 NPC 知道 X。NPC 的知识必须有世界内来源；没有来源就不知道。
 - library/ 是可复用 Source；games/<game-id>/ 是单局现实。单局变化绝不反写 library/。
 - 只把未来仍需存在的 durable facts 写入 game workspace；路人不必建档，但产生长期关系、承诺、债务、伤情、关键情报或未解决后果后必须可恢复。
+
+### DSH 原生选择交互
+当你有一组有限、明确的候选项需要玩家选择时，优先调用 DSH 的 \`ask_user_question\`，让 Web GUI 渲染可点击选项；不要仅在普通聊天正文里模拟 A/B/C 菜单。
+
+- New Game Setup 的世界、拓展包、世界起点/口径、角色创建方式、主角操控模式、最终确认等有限选择，必须使用 \`ask_user_question\`。
+- 拓展包选择必须使用 \`multi_select: true\`，让玩家一次勾选需要的 Expansion。
+- \`ask_user_question\` 自带 custom answer；选项不是封闭菜单，玩家始终可以输入其它答案。
+- 游戏中真正停在 meaningful choice 时，也优先用 \`ask_user_question\` 给出约 5 个简短、彼此有差异的行动方向。它们只是快捷建议，不限制玩家自由行动。
+- 没有真实选择点时不要为了凑选项强行弹 GUI；普通叙事、日常过渡和已经明确的动作不需要提问。
 
 ### 新游戏的硬边界
 正式叙事只能发生在玩家明确确认 Game Composition 之后。
@@ -28,9 +36,11 @@ New Game Setup 的固定顺序是：
 世界 → 拓展包 → 世界起点/口径 → 玩家角色 → 主角操控模式 → 最终配置确认 → 开局。
 
 每个环节都必须由玩家明确回答。模型自己的推断、推荐、预填、世界包默认或已经写进草稿文件的内容，都不能替代玩家回答。
-尤其是“拓展包”必须作为独立步骤明确询问；Optional Expansion 绝不能静默启用。穿越者身份与游戏系统也是两个独立选择。
+尤其是“拓展包”必须作为独立 GUI 步骤明确询问；Optional Expansion 绝不能静默启用。穿越者身份与游戏系统也是两个独立选择。
 
-玩家确认后，把本局 World / Expansions / World Start or Mode / Character / Control Mode 写入 COMPOSITION.md，并包含：
+一个 Setup 问题得到回答后，如果下一个环节仍然是有限选择，应直接继续调用 \`ask_user_question\` 推进向导，不需要等玩家再输入“继续”。只有确实需要自由描述时才停下来等待自然语言输入。
+
+玩家最终确认后，把本局 World / Expansions / World Start or Mode / Character / Control Mode 写入 COMPOSITION.md，并包含：
 - 确认状态: confirmed
 
 没有这行，本局仍处于 Setup，不是正式游戏。`
@@ -41,9 +51,9 @@ export function buildDynamicContext({ game, compositionStatus, dynamics, gamesDi
       '## The World 当前阶段',
       '- 当前没有已识别的正式游戏。',
       '- 如果玩家要求开始新游戏：进入 New Game Setup，不要直接写开场剧情。',
-      '- Setup 每个 assistant turn 只推进一个尚未完成的环节；已经由玩家明确回答的不要重复问。',
-      '- 第一个未回答环节是什么，就只问那个环节。不要一次替玩家填完后面的配置。',
-      `- 可用世界从 library/worlds/ 发现；可用拓展从 library/mechanics/ 发现。`,
+      '- 有限候选必须调用 `ask_user_question`，不要只在正文列 A/B/C。',
+      '- 固定顺序：世界 → 拓展包 → 世界起点/口径 → 玩家角色 → 主角操控模式 → 最终确认。',
+      '- 世界选定后，下一步必须是独立的拓展包 GUI；使用 `multi_select: true` 展示 library/mechanics/ 中实际可用的 Expansion。',
       `- 玩家最终确认前，不要创建 ${gamesDirDisplay}/<game-id>/ 的正式状态文件；${templateDirDisplay} 只是模板。`
     ].join('\n')
   }
@@ -53,9 +63,10 @@ export function buildDynamicContext({ game, compositionStatus, dynamics, gamesDi
       '## The World 当前阶段：NEW GAME SETUP（未确认）',
       `- 检测到目录 ${game.dir}/，但它没有玩家确认过的 COMPOSITION.md。它不是正式游戏。`,
       '- 不要继续其中已经写出的剧情，不要把 state/README 里模型自行生成的设定当成玩家选择。',
-      '- 根据当前对话找到“最早一个尚未由玩家明确回答的 Setup 环节”，只询问这一项。',
+      '- 根据当前对话找到最早一个尚未由玩家明确回答的 Setup 环节，并用 `ask_user_question` 询问。',
       '- 固定顺序：世界 → 拓展包 → 世界起点/口径 → 玩家角色 → 主角操控模式 → 最终确认。',
-      '- 特别检查拓展包：如果玩家从未明确看到并选择过拓展包，那么现在必须先展示 library/mechanics/ 中与所选世界可用的拓展并询问选择。已有草稿里出现 System ON、穿越、战斗等都不算玩家确认。',
+      '- 如果玩家从未通过 GUI 明确选择过拓展包，那么现在必须先展示 library/mechanics/ 中可用 Expansion，并使用 `multi_select: true`。已有草稿里的 System ON、穿越、战斗等都不算玩家确认。',
+      '- 每次 GUI 回答后继续推进下一个未完成环节；不要回到普通文本菜单。',
       '- 玩家最终明确确认完整配置后，才写/改 COMPOSITION.md 为 `- 确认状态: confirmed`，随后才能初始化或继续正式状态并进入第一幕。'
     ].join('\n')
   }
@@ -65,7 +76,8 @@ export function buildDynamicContext({ game, compositionStatus, dynamics, gamesDi
     `- Game: ${game.id}`,
     `- Composition: ${game.dir}/COMPOSITION.md（已由玩家确认）`,
     `- Control mode: ${dynamics.controlMode} — ${CONTROL_MODE_DESCRIPTIONS[dynamics.controlMode]}`,
-    `- current truth: ${game.dir}/state/CURRENT.md`
+    `- current truth: ${game.dir}/state/CURRENT.md`,
+    '- 到达 meaningful choice 时优先调用 `ask_user_question` 给约 5 个行动方向；玩家仍可 custom 输入任何其它行动。'
   ]
   if (dynamics.time) lines.push(`- 世界当前时间: ${dynamics.time}`)
   if (dynamics.location) lines.push(`- 主角当前位置: ${dynamics.location}`)
@@ -76,19 +88,21 @@ export function buildDynamicContext({ game, compositionStatus, dynamics, gamesDi
 export function buildNoGameInjection({ gamesDirDisplay, templateDirDisplay }) {
   return [
     '[The World New Game Setup]',
-    '如果玩家要开始新游戏，请严格按下面顺序推进，而且一次只问一个尚未完成的步骤：',
+    '玩家要开始新游戏时，使用 DSH 原生 `ask_user_question` 完成向导。有限候选不要只用普通文本列菜单。',
     '',
-    '1. 世界：查看 library/worlds/，列出当前可用世界的一句话说明，让玩家选。不要替玩家选。',
-    '2. 拓展包：世界选定后，必须单独进入这一问。查看 library/mechanics/，列出当前可用 Expansion，让玩家明确选择启用哪些。除非 Source 明确声明 hard dependency，否则不要自行发明 Required/Recommended；默认把可选 Expansion 当 Optional。没有玩家明确选择就一个都不要静默启用。',
-    '3. 世界起点 / 口径：根据所选 World Source 给出实际可用候选，让玩家选；不要自行决定年份、历史口径或开局地点。',
-    '4. 玩家角色：让玩家创建/选择角色。只有已经启用的 Expansion 才能提供对应角色选项。例如未选择系统，就不能自动给系统；穿越与系统是分开的决定。',
-    '5. 主角操控模式：full-control / light-delegation / narrative-delegation，让玩家选。',
-    '6. 最终确认：把以上已由玩家明确选择的内容完整列出，询问“确认开始吗？”。展示配置本身不等于确认。',
+    '固定顺序：',
+    '1. 世界：查看 library/worlds/，通过 `ask_user_question` 展示当前可用世界，让玩家选。',
+    '2. 拓展包：世界选定后必须马上单独询问。查看 library/mechanics/，用 `ask_user_question` + `multi_select: true` 展示实际可用 Expansion。没有玩家选择就不要静默启用 Optional Expansion。',
+    '3. 世界起点 / 口径：根据所选 World Source，通过 `ask_user_question` 给出实际候选；不要自行决定年份、历史口径或开局地点。',
+    '4. 玩家角色：先通过 `ask_user_question` 选择“创建原创角色 / 使用已有角色卡 / 世界预设 / 自定义”等方式；之后确需自由描述时再让玩家输入。只有已启用的 Expansion 才能提供对应角色选项。',
+    '5. 主角操控模式：通过 `ask_user_question` 让玩家选择 full-control / light-delegation / narrative-delegation。',
+    '6. 最终确认：展示完整配置，并用 `ask_user_question` 询问“开始游戏 / 返回修改”。展示配置本身不等于确认。',
     '',
-    '玩家明确确认之后，才创建/完成正式 game workspace，并首先保证 COMPOSITION.md 包含 `- 确认状态: confirmed`。然后再初始化 README、state/CURRENT.md、story/LEDGER.md、memory/RECENT.md 并进入第一幕。',
+    '一个 GUI 问题得到回答后，如下一步仍是有限选择，直接继续下一次 `ask_user_question`；不要要求玩家额外输入“继续”。',
+    '玩家明确选择“开始游戏”之后，才创建/完成正式 game workspace，并首先保证 COMPOSITION.md 包含 `- 确认状态: confirmed`。然后再初始化 README、state/CURRENT.md、story/LEDGER.md、memory/RECENT.md 并进入第一幕。',
     `正式游戏放在 ${gamesDirDisplay}/<game-id>/；${templateDirDisplay} 只用于复制基础目录。`,
     '',
-    '重要：如果玩家一句话中已经明确回答了某个后续环节，可以记住它；但不要因为能够推断就视为回答。模型推断 ≠ 玩家选择。'
+    '模型推断 ≠ 玩家选择。世界包默认 ≠ 玩家确认。草稿文件 ≠ 玩家确认。'
   ].join('\n')
 }
 
@@ -98,11 +112,23 @@ export function buildSetupResumeInjection({ game }) {
     `发现 ${game.dir}/，但该目录没有玩家确认过的 COMPOSITION.md，因此它只是未确认草稿，不是正式游戏。`,
     '不要恢复或继续草稿中的开场剧情。草稿里已经出现的年份、角色、穿越、System ON、系统档位、操控模式等，如果没有对应的玩家明确回答，都不能反推为玩家选择。',
     '',
-    '请根据当前对话，从下面顺序找到最早一个缺少玩家明确回答的步骤，然后只询问该步骤：',
+    '请根据当前对话，从下面顺序找到最早一个缺少玩家明确回答的步骤，并用 `ask_user_question` 继续：',
     '世界 → 拓展包 → 世界起点/口径 → 玩家角色 → 主角操控模式 → 最终确认。',
     '',
-    '如果“拓展包”从未被单独展示并让玩家选择，那么无论草稿里已经启用了什么，现在都必须回到拓展包选择。',
+    '如果“拓展包”从未通过 GUI 单独展示并让玩家选择，那么无论草稿里已经启用了什么，现在都必须回到拓展包选择，并使用 `multi_select: true`。',
     '只有玩家最终明确确认完整配置后，才能写入 `- 确认状态: confirmed` 并进入正式叙事。'
+  ].join('\n')
+}
+
+export function buildSetupContinueText({ game }) {
+  return [
+    '[World Core Setup 继续]',
+    game ? `当前 ${game.id} 仍未 confirmed。` : '当前仍处于 New Game Setup。',
+    '不要结束 Setup，也不要用普通文本 A/B/C 代替交互。',
+    '立即找到最早一个尚未由玩家明确回答的环节，并调用 DSH 原生 `ask_user_question`。',
+    '特别是拓展包必须独立出现，并使用 `multi_select: true`。',
+    '如果刚得到一个 GUI 回答，就继续下一个未完成的有限选择；最终必须经过 GUI 的完整配置确认。',
+    '只有玩家明确选择开始游戏后才能写 `- 确认状态: confirmed` 并进入叙事。'
   ].join('\n')
 }
 
@@ -131,16 +157,19 @@ export function buildRecoveryInjection({ game, source, current, recent, composit
   lines.push(
     '',
     `更多内容按需读取 ${game.dir}/story/、${game.dir}/memory/、${game.dir}/saves/ 与 library/ Source。`,
-    '以 game-local reality 为准接续游戏；不要重新走 New Game Setup，也不要静默增加未确认的 Expansion。'
+    '以 game-local reality 为准接续游戏；不要重新走 New Game Setup，也不要静默增加未确认的 Expansion。',
+    '当游戏真正停在 meaningful choice 时，优先调用 `ask_user_question` 提供约 5 个快捷行动方向，并保留 custom 自由输入。'
   )
   return lines.join('\n')
 }
 
 export function buildMaintenanceText({ game }) {
   return [
-    '[World Core 回合维护 — 不要输出面向玩家的内容]',
-    '本轮叙事已经结束。只检查是否产生了未来仍需存在的 durable change。不要继续剧情、不要推进时间。',
+    '[World Core 回合收尾]',
+    '先检查刚结束的玩家可见叙事：如果它停在一个真正的 meaningful choice，而且本次尚未通过 `ask_user_question` 给玩家快捷行动方向，则调用一次 `ask_user_question`，提供约 5 个简短、彼此有差异的行动方向；玩家仍可 custom 输入其它行动。没有真实选择点或已经给过 GUI，就不要重复提问。',
+    '如果因此收到玩家选择，把它视为玩家的下一行动并自然主持，不要把选项当成系统命令；本次收尾最多补一次此类 GUI。',
+    '随后只检查是否产生了未来仍需存在的 durable change。不要为了维护额外推进世界。',
     `有 durable change 时更新 ${game.dir}/state/CURRENT.md；值得长期追溯的事件补入 story/LEDGER.md；必要时刷新 memory/RECENT.md。`,
-    '没有 durable change 就不要写文件。完成后结束本轮。'
+    '没有 durable change 就不要写文件。除必要的 choice GUI 外，不要输出额外的后台维护说明。'
   ].join('\n')
 }
