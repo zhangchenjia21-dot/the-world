@@ -2,36 +2,115 @@
 
 `plugins/` 是 The World 面向 **DeepSeek Harness** 的 RPG 专用插件 Owner。
 
-这里与 `tools/` 职责不同：
+- `plugins/`：直接增加 RPG 产品价值、游戏模式、交互或机制深度；
+- `tools/`：窄而确定性的支持能力，尤其是由真实重复失败驱动的可靠性工具。
 
-- `plugins/`：可以因为直接增加游戏价值、沉浸感、交互或机制深度而存在；
-- `tools/`：主要承载窄而确定性的支持能力，尤其是由真实重复失败拉动的可靠性 / 校验工具。
-
-当前阶段不是立即开发所有插件，而是用 TW-00.5 Bare DSH Probe 先确定：**什么是 DSH 已经天然做得很好、什么才值得插件化。**
+当前阶段：**TW-01 Minimal World Core**。
 
 ---
 
-## 1. Plugin Layers
+## 1. World Core｜CURRENT
 
-### 1.1 World Core
+World Core 是 TW-01 Shared Foundation，是一个 **薄职责层**，不是第二套 Agent Runtime。
 
-TW-01 的 Shared Foundation。
+Bare DSH Probe 最终把 World Core 的真实职责收敛到：
 
-当前目标职责已经被 Bare DSH 试玩进一步收窄：
+### Game Entry / Recovery
 
-- 进入 / 继续 The World 游戏模式；
-- 提供必要且有界的 GM / world / workspace context；
-- 帮助 Agent 在全新 Session 恢复 game-local reality；
-- 帮助 Agent 识别并写回真正 durable 的动态人物、关系、承诺、后果与其它世界事实；
-- 提供当前 protagonist control mode / authorization boundary；
-- 保持 Persistent World、Player Spotlight、Player Agency、Model Freedom；
-- 不把自然语言主持变成审批 / typed mutation 流水线。
+- 进入 / 继续 The World game；
+- 找到当前 game workspace；
+- 读取最小恢复入口；
+- 在全新 DSH Session 恢复同一个世界；
+- 只组装当前必要 context。
 
-World Core 具体采用哪个 DSH extension seam，在 TW-01 按当前 DSH 正式接口实现。
+### Durable Maintenance Discipline
 
-### 1.2 RPG Experience / Mechanics Plugins
+Bare DSH 在长局后会逐渐停止修改游戏文件，因此 World Core 必须稳定承担：
 
-未来包括但不限于：
+> **本轮 / 本阶段是否产生未来仍需成立的变化？**
+
+有 durable change → 更新正确 Owner。  
+无变化 → 不机械写文件。
+
+关注：
+
+- dynamic NPC / identity；
+- relationships；
+- commitments / debts / hostility；
+- persistent injuries / capabilities；
+- locations / factions / world state；
+- quest / mechanic state；
+- unresolved consequences；
+- major time progression。
+
+### Dynamic Durable Identity
+
+> **Importance controls attention, not existence.**
+
+未命名、非 Source、低重要度不等于可以从世界中消失。
+
+### Knowledge / Exposure Boundary
+
+> **GM / Source / System knows X != NPC knows X.**
+
+World Core 需要稳定提醒 NPC knowledge provenance；第一版不建设 Knowledge ACL DB。
+
+### Player Authorization Context
+
+候选模式：
+
+- Full Control；
+- Light Delegation；
+- Narrative Delegation。
+
+共同原则：
+
+> **Compress dead time; stop at meaningful choice.**
+
+### Pacing Elasticity
+
+保留模型主动推进世界与年月的能力，同时保留自由探索、日常、关系与人格塑造空间。
+
+```text
+World Loop
+局势 / 事件 / 后果 / 时间推进
+
+Life Loop
+自由活动 / 日常 / 人物互动 / 关系与人格积累
+```
+
+> **推进世界，但不要让玩家永远只能响应事件。**
+
+World Core 不使用固定节奏 FSM。
+
+详细计划：`docs/TW-01_WORLD_CORE_PLAN.md`。
+
+---
+
+## 2. World Core Non-scope
+
+TW-01 v0.1 不默认建设：
+
+- narrative approval gate；
+- typed mutation engine；
+- universal entity schema；
+- knowledge ACL / provenance database；
+- 玩家行为白名单；
+- 模型创作白名单；
+- 每回合全文件 rewrite；
+- 全量世界逐实体模拟；
+- 完整 RPG UI；
+- Map / Combat / Economy engine。
+
+核心原则：
+
+> **Freedom Before Prevention. Prefer recovery over prevention.**
+
+---
+
+## 3. RPG Experience / Mechanics Plugins
+
+Gate A 后优先验证至少一个真正 RPG 专用插件，例如：
 
 - RPG UI / Presentation；
 - Map / Visualization；
@@ -41,50 +120,42 @@ World Core 具体采用哪个 DSH extension seam，在 TW-01 按当前 DSH 正�
 - Character Progression；
 - System / Quest；
 - Inventory；
-- 世界专属扩展机制。
+- world-specific expansions。
 
-这些插件由**产品价值**驱动，不要求先证明模型犯错。
+这些插件由**产品价值**驱动，不要求先证明模型失败。
 
 ---
 
-## 2. RPG UI Core Principle
-
-Bare DSH 试玩已经形成正式产品原则：
+## 4. RPG UI Core Principle
 
 > **Chat 展示机制事件；UI 承载机制当前状态。**
 
 ### Chat / Narrative Stream
 
-适合展示：
+适合：
 
-- 机制为什么触发；
-- 本次如何判定；
-- NPC / GM 的即时表现；
-- 叙事过程；
+- 机制触发；
+- 判定过程；
+- NPC / GM 即时表现；
 - 本轮后果；
-- 世界刚刚发生的变化。
+- 世界刚发生的变化。
 
 ### Persistent RPG UI
 
 适合持续查询：
 
-- **System**：系统等级、货币、模块、成长；
-- **Quest**：任务、目标、进度、奖励、完成 / 失败；
-- **Character**：属性、技能、健康、装备、成长；
-- **Relationship**：玩家实际结识的动态人物、关系、承诺；
-- **Map**：当前位置、已知地点、路线、区域状态；
-- **Faction / Reputation**：势力关系、声望与已知政治状态；
-- **Inventory / Economy**：物品、资源、货币；
-- **Save / Restore**：自动存档、恢复点、回档 / 分支；
-- **Protagonist Control Mode**：主角操控粒度。
-
-具体是统一 RPG Shell 由扩展贡献 panel，还是各机制独立提供 UI plugin，在 DSH capability survey 前暂不冻结。
+- System；
+- Quest；
+- Character / Relationship；
+- Map；
+- Faction / Reputation；
+- Inventory / Economy；
+- Save / Restore；
+- Protagonist Control Mode。
 
 ---
 
-## 3. UI Truth Boundary
-
-RPG UI 必须是 game truth 的投影，而不是第二事实源：
+## 5. UI Truth Boundary
 
 ```text
 Game-local Canonical State
@@ -94,174 +165,84 @@ Plugin projection / view model
 RPG UI
 ```
 
-禁止形成：
-
-```text
-聊天一套状态
-+
-文件一套状态
-+
-UI 自己再保存一套长期状态
-```
-
-插件 runtime cache 只有在构成 durable game fact 时才写回对应 game Owner。
+UI 不维护第二套长期事实。
 
 ---
 
-## 4. Dynamic Character / Relationship UI
+## 6. Dynamic Character / Relationship UI
 
-未来 Character / Relationship UI 不应只显示：
-
-- 初始角色卡；
-- 历史名人；
-- 预制 Source NPC。
-
-还必须显示运行中真正进入玩家世界历史的 game-local NPC，例如：
+未来 UI 不应只显示历史名人和 Source NPC，还必须显示运行中形成 durable identity 的人物：
 
 - 姓名未知人物；
 - 普通百姓；
 - 士卒；
-- 临时同伴；
+- 同伴；
 - 敌人；
 - 商人；
 - 地方官吏；
 - Agent 动态生成的原创 NPC；
-- Source / 历史 / 题材人物在当前 game 中演化后的版本。
+- Source 人物在当前 game 中演化后的版本。
 
-正式原则：
-
-> **重要性决定 UI prominence 和模拟资源，不决定实体是否存在。**
-
-例如玩家尚不知道某个 NPC 的名字时，UI 可以显示：
-
-```text
-老卒（姓名未知）
-关系：信任倾向
-状态：左腿旧伤
-最后已知位置：……
-```
-
-但只能显示**玩家已知信息**，不能把后台隐藏事实直接泄露到 UI。
+UI 只能显示**玩家已知信息**，不能泄漏后台知识。
 
 ---
 
-## 5. Agent Execution Trace Noise
+## 7. Agent Execution Trace Noise
 
-Bare DSH 默认界面会把大量：
-
-- `think`；
-- `read`；
-- `write`；
-- tool execution；
-
-混入玩家的主要阅读路径。
-
-这些信息对通用 Agent 调试有价值，但会明显破坏 RPG 沉浸。
-
-正式产品原则：
+Bare DSH `think/read/write/tool` 轨迹不适合作为 RPG 主阅读流。
 
 > **隐藏工作噪音，不限制 Agent 工作能力。**
 
-未来 RPG UI / Presentation Plugin 应：
-
-- 默认隐藏、折叠或降级 Agent 执行轨迹；
-- 主视图优先呈现 GM 最终叙事、NPC、世界信息和游戏交互；
-- 保留可选 debug / inspect 入口；
-- 不因此限制 Agent 正常使用文件和工具。
+未来 Presentation Plugin 默认折叠 / 隐藏 execution traces，但保留 debug / inspect。
 
 ---
 
-## 6. Protagonist Control Mode
+## 8. DSH Final Response Reliability
 
-Bare DSH 试玩出现过一次明显的 action batching：玩家只表达“准备前往东线”，GM 却可能一次推进采购、出发、遭遇、招募 / 收服与抵达目标。
+Bare DSH Probe 多次出现 reasoning / tools 已完成但没有 user-facing final response，输入“输出”后恢复。
 
-进一步产品讨论后，当前结论不是“禁止模型替玩家行动”，而是：
+当前归类：
 
-> **主角操控粒度应该成为可配置体验。**
+> **Host / Agent Turn Completion Reliability**
 
-候选 UI：
+不通过 RPG Prompt 修。
 
-```text
-主角操控模式
-○ Full Control｜完全操控
-● Light Delegation｜轻度托管
-○ Narrative Delegation｜叙事托管
-```
-
-### Full Control
-
-玩家亲自决定绝大多数主角行动与关键过程。
-
-### Light Delegation
-
-GM 可依据：
-
-- 当前玩家目标；
-- 角色卡；
-- 已形成性格 / 信条；
-- 明确计划；
-
-自动推进赶路、休息、常规采购、例行应对等低价值步骤。
-
-### Narrative Delegation
-
-玩家主要做战略目标与重大选择，GM 可以更积极地代行符合角色人格的过程行为。
-
-共同原则：
-
-> **Compress dead time; stop at meaningful choice.**
-
-玩家应可以随时：
-
-- 手动接管；
-- 临时要求“这段直接推进到 X”；
-- 临时要求“这段我逐步操作”；
-- 切换模式。
-
-这项能力既可能由 RPG UI 提供设置，也需要 World Core 把当前授权上下文传给 GM；最终 seam 在实现阶段决定。
+如果 DSH 上游长期未解决，可由宿主 / UI 做窄补救：检测 `turn ended + no final assistant message` 并提供 continue / emit-final recovery。
 
 ---
 
-## 7. Save / Restore Surface
+## 9. Save / Restore Surface
 
-Bare DSH 当前 `save/` 更接近 latest-state workspace，不等于玩家级回档系统。
-
-未来 Save / Restore UI 候选包括：
+未来候选：
 
 - Auto Save；
 - named Save Point；
 - Undo / Regenerate；
 - Restore；
-- 从旧节点 Branch。
+- Branch from Save。
 
-恢复不能只回滚 Markdown 文件而让 Agent Session 仍记得未来时间线；需要保证恢复后的 GM 认知与 game state 对齐。
-
-具体实现暂不冻结。
+恢复必须让 game files 与 Agent / Session 时间线一致。
 
 ---
 
-## 8. Host Boundary
-
-默认：
+## 10. Host Boundary
 
 > **DSH-native, not DSH-internal-coupled.**
 
-优先使用 DSH documented extension points，不 fork / patch 通用 Agent Runtime。
+优先使用 DeepSeek Harness documented extension points，不 fork / patch 通用 Agent Runtime。
 
-DSH 处于 Developer Preview；integration layer 可以迁移，但长期 game data、世界资产和历史语义应尽量稳定、可移植。
+长期 game data、资产和历史语义应保持可迁移。
 
 ---
 
-## 9. Current Route
+## 11. Current Route
 
 ```text
 Product Definition Gate PASS
 ↓
-TW-00.5 Bare DSH Capability Probe   ← CURRENT
+TW-00.5 Bare DSH Capability Probe   ✓ COMPLETE
 ↓
-Extract Real Gaps
-↓
-TW-01 Minimal World Core
+TW-01 Minimal World Core            ← CURRENT
 ↓
 Reality Gate A
 ↓
@@ -270,4 +251,6 @@ RPG Experience / Mechanics Plugin
 Reality Gate B
 ```
 
-不要用大量 UI / mechanics 掩盖基础长期世界问题；也不要因为某个机制未来会有 UI，就提前把自然语言机制全部程序化。
+当前第一开发任务：
+
+> **核验 current DSH extension seams，然后实现最小 World Core plugin skeleton。**
