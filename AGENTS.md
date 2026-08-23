@@ -5,225 +5,319 @@
 
 ## 1. 项目定位
 
-`the-world` 是一个 Agent-native 长期 AI 世界 / RPG 实验项目。
+`the-world` 是一个以 **DeepSeek Harness（DSH）为 Reference Host** 的 Agent-native 长期 RPG 项目。
 
-第一阶段的核心假设是：
+当前产品方向已通过 Product Definition Gate：
 
-> 现代 Agent 已经具备语言理解、规划、搜索和文件读写能力，因此应先验证“Agent + 简单文件系统”是否足以承担主持、长期状态与记忆维护；只有真实失败，才增加程序化能力。
+```text
+DeepSeek Harness
++
+World Core 游戏模式
++
+持久世界工作区
++
+RPG 专用插件
+```
 
-本仓库不是 SillyTavern 的替代仓库，也不得自动继承其 Runtime、数据库、协议或历史约束。
+The World 默认不重造独立 Agent Runtime，也不得自动继承 SillyTavern 的 Runtime、数据库、typed mutation、协议或历史约束。
 
-## 2. 权威顺序
+## 2. 当前产品原则
 
-发生冲突时按以下顺序处理：
+正式工作不得偏离以下 current product decisions：
+
+- **Persistent World + Player Spotlight**：世界独立存在，但 GM 主动把有意义的舞台组织到玩家身边；
+- **Unlimited Attempt, Consequence-bound World**：玩家可以尝试任何游戏内行为，世界负责给出可信后果；
+- **Player Agency**：Agent 不替玩家做未输入的关键选择、承诺或不可逆行动；
+- **Model Freedom**：默认不以预防模型错误为理由建设大规模审批、权限、typed mutation 或严格状态机；
+- **Recovery First**：低成本错误优先撤回、重答、修正、Restore；
+- **Player Plays, Agent Maintains**：玩家主要负责玩，Agent 负责工作区维护；
+- **DSH-native, not DSH-internal-coupled**：利用 DSH 正式插件 / capability seams，不把长期 game data 绑死到易变内部实现。
+
+产品事实以 `docs/PRODUCT_SPEC_CURRENT.md` 为准。
+
+## 3. 权威顺序
+
+发生冲突时按：
 
 1. 用户当前明确指令；
 2. `docs/PRODUCT_SPEC_CURRENT.md`；
 3. `docs/ARCHITECTURE_CURRENT.md`；
 4. 当前 game 的 `state/` canonical facts；
 5. 当前 game 的 `story/` 与 `memory/`；
-6. `README.md` 导航说明；
-7. 跨项目 `Vibe-Coding` current 方法论；
-8. `Skill` 仓库 current Skill；
-9. 历史聊天、旧摘要与模型记忆。
+6. `README.md`；
+7. `Vibe-Coding` current；
+8. `Skill` current；
+9. 历史聊天、旧摘要、旧附件与模型记忆。
 
-README 是入口，不应成为与 current spec 并列的第二套产品事实源。
+跨项目通用方法与本项目明确产品裁定冲突时，以本项目 current Product Spec 为准。
 
-## 3. 正式任务前的读取顺序
+## 4. 正式任务前读取
 
-默认只读取完成当前任务所需的最小充分工作集：
+只读取完成当前任务所需的最小充分工作集：
 
 ```text
 README.md
 → AGENTS.md
 → docs/PRODUCT_SPEC_CURRENT.md
 → docs/ARCHITECTURE_CURRENT.md
-→ 当前 game 的 README / state/CURRENT.md
-→ 与当前任务直接相关的 story / memory / library 文件
+→ 当前 game / plugin / asset 的直接 Owner
 ```
 
-普通任务初始工作集优先控制在 3–7 个入口；证据不足时再扩大。
+普通任务初始优先控制在 3–7 个入口，证据不足再扩大。
 
-禁止为了“更了解世界”无目的全仓读取。
+## 5. Freshness 与写回
 
-## 4. Freshness 与写回
+新的正式任务、Stage / Reality Gate、重要 game fact 修改、plugin 开发或正式 Agent Task 开始前，先核验 GitHub `main` current。
 
-新的正式任务开始时，先确认目标仓库 `main` 当前状态。
+写回前重新取得目标文件当前 SHA；禁止用旧副本覆盖并行更新。
 
-写回前重新取得将修改文件的当前版本 / SHA。若目标文件在任务期间发生变化：
+发现新产品 / 架构决策后，不只“读到”，还要检查：
 
-- 无关变化：吸收后继续；
-- 改变产品、架构、目录 Owner 或目标事实：先重新评估任务；
-- 禁止基于旧副本静默覆盖新 current。
+- Current Task；
+- 正确 Owner；
+- game-local propagation；
+- Reality Gate；
+- 下一步路线。
 
-## 5. Folder Ownership
+## 6. Folder Ownership
+
+### `docs/`
+
+项目级 current 产品与工作架构。
+
+### `plugins/`
+
+The World 面向 DeepSeek Harness 的 RPG 专用插件 Owner。
+
+包括：
+
+- World Core；
+- RPG UI；
+- Map / Visualization；
+- Mechanics / Expansion plugins。
+
+这些能力可以由**产品价值**直接驱动，不要求先出现模型错误。
 
 ### `library/`
 
-可复用 Source Assets。默认只读，不被某一局游戏反向污染。
+可复用 Source Assets。默认不被单局游戏反向污染。
 
 ### `games/<game-id>/state/`
 
-当局当前世界的主要 canonical owner。
-
-如果一个事实回答“这局游戏现在真实是什么”，优先写这里。
+当局 current world reality 的主要 canonical owner。
 
 ### `games/<game-id>/story/`
 
-重要剧情账本：时间线、关键事件、未决钩子、承诺与长期后果。
+重要历史、转折、承诺、后果与 unresolved hooks。
 
-不是逐字聊天日志，也不是当前状态的第二副本。
+不是 current state 第二副本。
 
 ### `games/<game-id>/memory/`
 
-Agent 上下文压缩层。可包含 recent / long-term / NPC memory 和读取索引。
-
-Memory 是辅助恢复层，不得反向覆盖 `state/` 的 current truth。
+上下文压缩 / retrieval layer。可重写，不覆盖 `state/` current truth。
 
 ### `games/<game-id>/saves/`
 
-恢复点 / 分支 / snapshot 的记录与产物。
+明确恢复点 / 分支 / snapshot 的语义 Owner。
 
 ### `tools/`
 
-仅放经真实失败证明值得程序化的确定性工具。
+窄而确定性的支持工具。
 
-## 6. Source 与 Game-local 隔离
+若主要目的是修复模型 / 文件错误，默认由真实重复失败驱动；若是游戏机制的一部分，可被 `plugins/` 消费。
 
-游戏运行中：
+## 7. World Core Boundary
 
-- 不直接修改 `library/` 来表达单局演化；
-- 新 NPC、新地点、新关系、新事实进入当前 `games/<game-id>/`；
-- Source 更新是否影响已有 game，必须有明确决定，不得自动覆盖；
-- 若需要从 Source 初始化 game，复制、引用或 overlay 的技术形式可以演化，但语义必须保持实例独立。
+World Core 是 TW-01 Shared Foundation。
 
-## 7. 一次事实变化的传播
+它可以：
 
-重要 durable 变化出现后，Agent 应判断它是否同时影响：
+- 在游戏模式中稳定提供每轮必要上下文；
+- 提供 GM / 世界 / Player Agency 原则；
+- 定义文件读取与 durable write 职责；
+- 帮助 Agent 恢复游戏、选择相关上下文并维护工作区。
 
-- current state；
-- story timeline / important event；
-- unresolved hook；
-- long-term memory；
-- save checkpoint。
+它默认不应变成：
 
-不是每次都全部更新；只更新受影响 Owner。
+- narrative approval gate；
+- typed mutation 强制流水线；
+- “程序批准后事实才能存在”的通用 Commit Engine；
+- 玩家行为白名单；
+- 模型创作范围白名单。
 
-禁止：
+如果未来真实失败证明需要某种约束，只增加最窄边界。
+
+## 8. Source 与 Game-local 隔离
+
+- `library/` 是可复用起点；
+- 单局新增人物、地点、关系、历史分叉进入当前 game；
+- Source 更新是否影响已有 game 必须显式决定；
+- 历史世界只定义起始 canonical condition，游戏开始后的 game-local reality 优先；
+- 已发生的历史分叉不得为了贴回 Source 被静默修正。
+
+## 9. Persistent World & Player Spotlight
 
 ```text
-state 已改变
-但 story / memory 仍长期保留相反旧口径
+Persistent != Fully Simulated
 ```
 
-## 8. Player Agency
+Agent 可以让玩家视野外的 NPC、势力和事件继续演化，但不要求全世界逐实体 tick。
 
-Agent 可以主动推进 NPC、世界、环境和事件，但不得替玩家：
+GM 应根据世界因果、人物目标、时间和玩家相关性判断哪些变化值得发生并重新进入玩家体验。
 
-- 做未输入的关键选择；
-- 说未表达的话；
-- 答应承诺；
-- 执行不可逆行动。
+世界不围绕玩家存在；叙事注意力优先服务玩家的游戏体验。
 
-世界主动性与玩家自主权必须同时保留。
+## 10. Player Agency & Attempt
 
-## 9. Context Growth 原则
+玩家可以尝试任何游戏内行为，程序不得仅因为其疯狂、愚蠢、危险或不符合推荐路线而拒绝。
+
+```text
+Player owns Attempt
+World owns Consequence
+GM owns Playability of the Consequence
+```
+
+Agent 不得替玩家说话、答应承诺、做关键决定或执行未表达的不可逆玩家行动。
+
+## 11. Model Freedom & Recovery
+
+默认优先：
+
+```text
+Freedom Before Prevention
+Prefer Recovery over Prevention
+```
+
+单次可见、低成本错误优先：
+
+- Undo；
+- Regenerate；
+- Agent / 人工修正；
+- Restore；
+- Save branch。
+
+不要因为理论风险，把 GM 创意、世界主动性和玩家自由一起锁死。
+
+## 12. Product-value Capability vs Failure-driven Guardrail
+
+新增程序化能力前先分类。
+
+### Product-value Capability
+
+例如 RPG UI、Map、Combat、Politics、Economy、Character Progression。
+
+若它直接增加沉浸、交互、机制深度或传统 RPG 体验，可以按产品路线开发，不需要“先失败”。
+
+### Failure-driven Guardrail
+
+例如 consistency validator、typed mutation、atomic writer、schema checker、duplicate detector。
+
+若主要目的是防止错误，至少确认：
+
+1. 真实失败已经发生；
+2. 失败反复或代价明显；
+3. Undo / 修正 / Agent 自检不够；
+4. 最窄确定性方案能解决；
+5. 不显著损害核心游戏体验。
+
+禁止从“以后可能出错”直接推导重型 Runtime / DB / Protocol。
+
+## 13. Context Growth
 
 ```text
 Game History Growth
 != Agent Context Growth
 ```
 
-长局优先通过：
+默认恢复：
 
 ```text
-state/CURRENT
-→ recent memory
-→ long-term memory / unresolved hooks
-→ 相关 story
-→ 按需追溯 source / old events
+game README
+→ state/CURRENT
+→ recent / unresolved memory
+→ 当前相关 story / state
+→ 必要 source
+→ older history on demand
 ```
 
-不要每回合加载全部历史。
+World Core 每轮必读不等于每轮全仓读取。
 
-## 10. Failure-driven Tooling
+## 14. Durable Change Propagation
 
-任何新增数据库、Schema、validator、脚本、服务、协议或复杂自动化前，先回答：
+重要变化后判断是否影响：
 
-1. 已经出现了什么真实失败？
-2. 频率和影响是什么？
-3. Agent 自我校验能否解决？
-4. 更窄的小工具能否解决？
-5. 该能力是否会损害主持自由度或增加维护成本？
+- state；
+- story；
+- unresolved hook；
+- memory；
+- save。
 
-没有真实证据时，默认不平台化。
+只更新真正受影响的 Owner。
 
-## 11. Markdown-first
+禁止让 memory 长期把旧状态当 current，也禁止让 plugin cache 成为第二 game truth。
 
-第一阶段默认：
+## 15. Markdown-first
 
-- 人类与 Agent 共同理解的内容 → Markdown；
-- 必须机器严格校验 / 计算的结构 → 再考虑 JSON / YAML；
-- 真实需要事务、查询或规模能力 → 再考虑数据库。
+第一阶段：
 
-文件格式服务任务，不反过来定义产品。
+- 人 / Agent 共同理解内容 → Markdown 优先；
+- 真正需要机器计算 / 校验 → 再结构化；
+- 真正需要查询 / 原子性 / 并发 / 性能 → 再考虑 DB / Service。
 
-## 12. 用户不是 QA Bot
+格式服务产品，不反过来定义产品。
 
-Agent 应主动负责：
+## 16. 用户不是 QA Bot
 
-- 找重复和冲突；
-- 找旧值；
-- 找断链；
-- 检查当前状态与剧情记忆是否一致；
-- 检查写入是否进入正确 Owner；
-- 检查新结构是否造成第二事实源；
-- 修改后自行复查。
+Agent 应主动完成：
 
-用户主要负责：
+- 搜索与恢复；
+- 去重、旧值、断链检查；
+- Owner / propagation 复查；
+- current state / memory / story 的明显一致性检查；
+- 修改后的 focused validation。
 
-- 玩家行动；
-- 主观游玩体验；
-- 产品方向；
-- 真正不可由 Agent 代替的裁定。
+用户主要负责玩家行动、主观游戏体验和真正的产品裁定。
 
-## 13. Public Repository Safety
+## 17. Reality Gates
 
-本仓库当前为 public。
+### Gate A — World Core Viability
 
-禁止提交：
+至少证明：
 
-- 密码、Token、Cookie、API Key、私钥；
-- 不希望公开的个人信息；
-- 私密聊天原文；
-- 无权公开的版权 / 保密资料。
+- 玩家想继续玩；
+- GM 质量没有明显下降；
+- 全新 DSH Session 能恢复同一个世界；
+- 存在真实长期因果与离屏变化；
+- 玩家不用维护后台文件。
 
-发现疑似敏感信息时，优先停止写入而不是“先提交再删除”。
+### Gate B — RPG Specialization Value
 
-## 14. 跨项目上游
+Gate A 通过后，至少一个 RPG 专用插件证明明显的游戏化 / 沉浸 / 机制增益。
 
-需要开发方法论时读取：
+当前下一步：`TW-01 / First Real Vertical`。
 
-`https://github.com/zhangchenjia21-dot/Vibe-Coding`
+## 18. Public Repository Safety
 
-需要 Skill 时读取：
+本仓库是 public。
 
-`https://github.com/zhangchenjia21-dot/Skill`
+禁止提交秘密、凭证、私密个人内容、私密聊天原文，以及无权公开的版权 / 保密材料。
 
-以其 `main` current 为准，不在本仓库复制整套上游正文。
+## 19. 跨项目上游
 
-## 15. 结构扩展规则
+开发方法论：`https://github.com/zhangchenjia21-dot/Vibe-Coding`
 
-新增根目录前先判断现有 Owner 是否已经足够。
+执行 Skill：`https://github.com/zhangchenjia21-dot/Skill`
 
-优先扩展现有结构：
+使用时读取其 `main` current，但不得让通用方法论覆盖 The World 已明确的产品裁定。
+
+## 20. 结构扩展规则
+
+当前优先 Owner：
 
 ```text
-docs / library / games / tools
+docs / plugins / library / games / tools
 ```
 
-只有新职责无法合理归入现有 Owner 时，才新增根目录。
+只有新职责无法合理归入现有 Owner 时才新增根目录。
 
-原则：
-
-> 迁移经过真实项目验证的方法论，不迁移与本项目目标无关的工程仪式。
+> 迁移经过验证的方法论，不迁移与本项目目标无关的工程仪式。
