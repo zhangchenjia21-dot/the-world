@@ -1,0 +1,21 @@
+# Secrets / local credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets/
+private/
+.local/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Runtime scratch
+.tmp/
+tmp/
+*.log
