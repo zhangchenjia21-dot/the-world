@@ -1,0 +1,17 @@
+{
+  "name": "the-world-core",
+  "version": "0.1.0",
+  "description": "The World TW-01 Minimal World Core：DSH 原生 RPG 游戏模式插件（游戏恢复 / 持久维护协调 / 认知边界 / 操控粒度 / 节奏弹性）。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "license": "MIT"
+}
