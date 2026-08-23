@@ -64,7 +64,7 @@ World / GM owns Consequence
 
 ### 5. 玩家自身 durable state 维护较稳定
 
-在最新 TEST checkpoint `cfa88b8d21152647bc6733303bdc588a5a926e14` 中，DSH 能持续把玩家的：
+在最新已核验 TEST checkpoint `cfa88b8d21152647bc6733303bdc588a5a926e14` 中，DSH 能持续把玩家的：
 
 - 新技能；
 - 战斗风格萌芽；
@@ -77,6 +77,14 @@ World / GM owns Consequence
 写回 `player_character.md`。
 
 这说明当前主要问题不是“Agent 完全不会持久化”，而是不同类型 durable facts 的维护稳定性存在明显差异。
+
+### 6. 能把玩家需求转译为世界内合理机会
+
+玩家在后续试玩中提出“需要一位谋士”。根据玩家反馈，DSH 没有直接投放当前阶段不合理的历史名臣，而是创造了一个能力、身份与玩家当前处境相称的原创人物，并把该人物与前文酒肆遭遇形成呼应。
+
+当前把这一现象视为正向的 Player Spotlight / dramatic organization 证据：模型能够理解玩家当前想发展的方向，并尝试从既有世界因果中组织可玩的机会，而不是简单按关键词召唤著名角色。
+
+但这一能力同时存在潜在风险，见下方 Watch 01；目前不据单次成功增加任何限制。
 
 ---
 
@@ -139,7 +147,7 @@ UI 应是 game truth 的可视化 / 交互投影，不成为第二事实源。
 
 #### 最新重复证据
 
-TEST checkpoint `cfa88b8d21152647bc6733303bdc588a5a926e14` 相对上一 checkpoint 只修改了：
+已核验 TEST checkpoint `cfa88b8d21152647bc6733303bdc588a5a926e14` 相对上一 checkpoint 只修改了：
 
 - `save/player_character.md`；
 - `save/session_log.md`。
@@ -228,10 +236,48 @@ UI 展示必须遵守玩家知识边界：不能因为后台存在 NPC 的隐藏
 
 ---
 
+## 观察项｜尚未定性为缺口
+
+### Watch 01｜Player Desire Accommodation Bias
+
+来源：玩家在后续试玩中表达“需要一位谋士”，DSH 随后通过一个与当前身份、接触渠道和前文酒肆情节相符的原创人物回应这一需求。
+
+这次结果本身是正向体验：
+
+- 没有直接投放当前阶段不合理的历史名臣；
+- 人物能力与玩家现阶段相称；
+- 人物出现有前文呼应，不是完全凭空掉落；
+- 玩家需求被转译成了世界内的可玩机会。
+
+潜在风险是：如果这种模式在后续反复退化为“玩家声明需要什么，世界就及时生成一个当前可接触、可招募、能力恰好合适的对象”，则可能削弱：
+
+- 人才稀缺性；
+- 信息与渠道价值；
+- 社会网络与身份门槛；
+- 寻访 / 错过 / 竞争等 RPG 过程；
+- World Independence。
+
+当前不把该风险升级为规则或 guardrail，也不向 Bare DSH 增加任何限制性提示。
+
+继续观察时只区分：
+
+```text
+Player Desire
+→ 可以影响 GM 把什么机会放入叙事聚光灯
+
+Player Desire
+≠ 自动保证世界中存在、可接触、可招募、可承担且能力恰好的目标
+```
+
+只有当“按需供货式人才生成”重复出现并明显降低稀缺感、探索价值或世界可信度时，再考虑是否需要极薄的 GM guidance。单次合理满足应优先视为优秀的 Player Spotlight，而不是失败。
+
+---
+
 ## 当前实验纪律
 
-- 不因为该失败已经重复出现就直接建设 Schema / Validator；
+- 不因为动态 NPC 持久化失败已经重复出现就直接建设 Schema / Validator；
 - 现在已有足够证据把“动态 durable entity 识别与写回”列入 TW-01 World Core 候选 Required Behavior；
 - 首选仍是极薄的语义提醒 / 协调机制，而不是 typed mutation 或审批流水线；
 - 后续继续观察除 NPC 外，地点、势力、承诺、任务等运行中动态实体是否也出现相同的 selective persistence bias；
-- 任何修复必须继续保护 Bare DSH 当前表现良好的文笔、主动性、GM Authority 与自然机制 adjudication。
+- 对尚未重复验证的问题（例如 Player Desire Accommodation Bias）只记录观察，不提前增加限制；
+- 任何修复必须继续保护 Bare DSH 当前表现良好的文笔、主动性、GM Authority、Player Spotlight 与自然机制 adjudication。
