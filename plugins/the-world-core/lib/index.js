@@ -3,8 +3,9 @@
  *
  * 程序只保证几个长期容易失守的边界：
  * - 未经玩家确认的 Game Composition 不能进入正式游戏；
+ * - Setup 的有限选择优先走 DSH 原生 ask_user_question；
  * - 已确认游戏会在新 Session 恢复；
- * - 正式游戏每轮结束会做一次 durable-change review；
+ * - 正式游戏每轮结束会做一次 durable-change / choice-UI review；
  * - 具体世界内容、叙事和文件语义仍交给模型。
  */
 import z from '@deepseek-ai/schemastery'
@@ -22,6 +23,7 @@ import {
   buildRecoveryInjection,
   buildNoGameInjection,
   buildSetupResumeInjection,
+  buildSetupContinueText,
   buildMaintenanceText
 } from './提示文本.js'
 import path from 'node:path'
@@ -37,6 +39,7 @@ export const Config = z.object({
 })
 
 const SOURCE = { kind: 'plugin', plugin: name }
+const MAX_SETUP_NUDGES_PER_TURN = 6
 
 function cwdOf(agent) {
   return agent?.session?.header?.cwd
@@ -49,6 +52,17 @@ function userMessage(text, form) {
   })
 }
 
+function countForTurn(store, agent, turn) {
+  let turns = store.get(agent)
+  if (!turns) {
+    turns = new Map()
+    store.set(agent, turns)
+  }
+  const count = turns.get(turn) ?? 0
+  turns.set(turn, count + 1)
+  return count
+}
+
 export function apply(ctx, config) {
   const logger = ctx.logger('the-world-core')
 
@@ -59,8 +73,7 @@ export function apply(ctx, config) {
   })
 
   // 每次模型请求都重新检查确认状态。
-  // 这是确认门的关键：不能只在 session-start 检查，否则模型在同一 Session
-  // 里先写出 state/CURRENT.md 就会被误识别成已经正式开局。
+  // 不能只在 session-start 检查，否则同一 Session 内的半成品目录会被误当正式游戏。
   ctx.systemPrompt.context({
     name: 'the-world:game-state',
     order: 100,
@@ -102,8 +115,6 @@ export function apply(ctx, config) {
 
       const compositionStatus = readCompositionStatus(game.dir)
 
-      // COMPOSITION 缺失和 COMPOSITION 未确认都属于 Setup 未完成。
-      // 不再把“缺 COMPOSITION 的旧目录”自动当成可继续的正式游戏。
       if (compositionStatus !== 'confirmed') {
         agent.inject(userMessage(buildSetupResumeInjection({ game }), 'setup'))
         return
@@ -122,17 +133,29 @@ export function apply(ctx, config) {
     }
   })
 
+  // Setup 是一次交互式向导。模型如果在未 confirmed 时准备结束本轮，
+  // 允许 World Core 在同一 turn 内轻推它继续使用 ask_user_question。
+  // 上限只用于防止模型持续拒绝工具时形成无限 steering。
+  const setupNudges = new WeakMap()
   const maintainedTurns = new WeakMap()
+
   ctx.on('agent/turn-stopping', ({ agent, turn, signal }) => {
-    if (!config.maintenance || signal?.aborted) return
+    if (signal?.aborted) return
 
     try {
       const cwd = cwdOf(agent)
       const game = cwd ? resolveGame(cwd, config.gamesDir) : null
-      if (!game) return
+      const compositionStatus = game ? readCompositionStatus(game.dir) : null
 
-      // Setup 阶段不是游戏回合，禁止 maintenance 把半成品写成正式状态。
-      if (readCompositionStatus(game.dir) !== 'confirmed') return
+      if (compositionStatus !== 'confirmed') {
+        const priorNudges = countForTurn(setupNudges, agent, turn)
+        if (priorNudges >= MAX_SETUP_NUDGES_PER_TURN) return
+
+        agent.steer(userMessage(buildSetupContinueText({ game }), 'setup'))
+        return
+      }
+
+      if (!config.maintenance || !game) return
 
       let turns = maintainedTurns.get(agent)
       if (!turns) {
@@ -144,7 +167,7 @@ export function apply(ctx, config) {
 
       agent.steer(userMessage(buildMaintenanceText({ game }), 'maintenance'))
     } catch (error) {
-      logger.warn('turn-stopping 维护提醒失败: %s', error?.message ?? error)
+      logger.warn('turn-stopping World Core 收尾失败: %s', error?.message ?? error)
     }
   })
 }
