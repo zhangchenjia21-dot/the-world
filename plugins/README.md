@@ -38,6 +38,36 @@ World Core 的具体 DSH extension seam、package shape 和配置方式在 TW-01
 
 这些插件由产品价值驱动，不需要先证明模型犯错。
 
+## Bare DSH 试玩已观察到的体验缺口
+
+### RPG UI：Agent 执行轨迹噪音
+
+来源：Bare DSH Capability Probe，TEST 分支，T1 实际试玩反馈（2026-08-23）。
+
+当前 DeepSeek Harness 默认 Agent 交互界面在玩家提交游戏输入后，会在主要游戏阅读路径中出现大量 Agent 执行过程记录，例如：
+
+- `think`；
+- `read`；
+- `write`；
+- 其它工具 / 执行轨迹。
+
+这些信息对通用 Agent 调试和工作透明度有价值，但在 RPG 主路径中会明显打断叙事连续性和沉浸感，使玩家感觉自己正在观看 Agent 执行任务，而不是直接经历游戏世界。
+
+这不是 World Core 可靠性问题，也不应通过限制 Agent 少读 / 少写来解决。
+
+未来 RPG UI / Presentation Plugin 应优先考虑：
+
+- 默认把 Agent 执行轨迹从主要叙事流中隐藏、折叠或降级展示；
+- 玩家主视图优先呈现 GM 的最终游戏输出、角色 / 世界信息和可交互游戏元素；
+- 仍保留可选的展开 / 调试入口，使需要时能够查看 Agent 行为；
+- 不因追求界面干净而削弱 Agent 正常使用 `read` / `write` / tools 的能力。
+
+产品原则：
+
+> **隐藏工作噪音，不限制 Agent 工作能力。**
+
+当前状态：真实体验证据已出现，作为后续 Reality Gate B / RPG UI Plugin 的候选 Required Experience Improvement；具体 UI 形态暂不冻结。
+
 ## Host Boundary
 
 默认原则：
