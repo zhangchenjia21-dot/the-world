@@ -20,14 +20,15 @@ export const GAME_MODE_SECTION_TEXT = `## The World — 游戏模式
 - library/ 是可复用 Source；games/<game-id>/ 是单局现实。单局变化绝不反写 library/。
 - 只把未来仍需存在的 durable facts 写入 game workspace；路人不必建档，但产生长期关系、承诺、债务、伤情、关键情报或未解决后果后必须可恢复。
 
-### DSH 原生选择交互
-当你有一组有限、明确的候选项需要玩家选择时，优先调用 DSH 的 \`ask_user_question\`，让 Web GUI 渲染可点击选项；不要仅在普通聊天正文里模拟 A/B/C 菜单。
+### DSH 原生选择交互（仅用于配置流程）
+New Game Setup 中有一组有限、明确的候选项需要玩家选择时，优先调用 DSH 的 \`ask_user_question\`，让 Web GUI 渲染可点击选项；不要仅在普通聊天正文里模拟 A/B/C 菜单。
 
 - New Game Setup 的世界、拓展包、世界起点/口径、角色创建方式、主角操控模式、最终确认等有限选择，必须使用 \`ask_user_question\`。
 - 拓展包选择必须使用 \`multi_select: true\`，让玩家一次勾选需要的 Expansion。
-- \`ask_user_question\` 自带 custom answer；选项不是封闭菜单，玩家始终可以输入其它答案。
-- 游戏中真正停在 meaningful choice 时，也优先用 \`ask_user_question\` 给出约 5 个简短、彼此有差异的行动方向。它们只是快捷建议，不限制玩家自由行动。
-- 没有真实选择点时不要为了凑选项强行弹 GUI；普通叙事、日常过渡和已经明确的动作不需要提问。
+- \`ask_user_question\` 自带 custom answer；Setup 选项不是封闭菜单，玩家始终可以输入其它答案。
+- 正式游戏开始后，不要为了行动建议调用 \`ask_user_question\`。游戏中的选择继续使用自然对话。
+- 当正式游戏停在 meaningful choice 时，通常在当前回复正文末尾给出约 5 个简短、彼此有差异的可行动方向；这些只是建议，不是菜单，玩家始终可以自由输入任何其它行动。
+- 没有真实选择点时不要为了凑选项强行列行动方向。
 
 ### 新游戏的硬边界
 正式叙事只能发生在玩家明确确认 Game Composition 之后。
@@ -51,7 +52,7 @@ export function buildDynamicContext({ game, compositionStatus, dynamics, gamesDi
       '## The World 当前阶段',
       '- 当前没有已识别的正式游戏。',
       '- 如果玩家要求开始新游戏：进入 New Game Setup，不要直接写开场剧情。',
-      '- 有限候选必须调用 `ask_user_question`，不要只在正文列 A/B/C。',
+      '- Setup 的有限候选必须调用 `ask_user_question`，不要只在正文列 A/B/C。',
       '- 固定顺序：世界 → 拓展包 → 世界起点/口径 → 玩家角色 → 主角操控模式 → 最终确认。',
       '- 世界选定后，下一步必须是独立的拓展包 GUI；使用 `multi_select: true` 展示 library/mechanics/ 中实际可用的 Expansion。',
       `- 玩家最终确认前，不要创建 ${gamesDirDisplay}/<game-id>/ 的正式状态文件；${templateDirDisplay} 只是模板。`
@@ -77,7 +78,7 @@ export function buildDynamicContext({ game, compositionStatus, dynamics, gamesDi
     `- Composition: ${game.dir}/COMPOSITION.md（已由玩家确认）`,
     `- Control mode: ${dynamics.controlMode} — ${CONTROL_MODE_DESCRIPTIONS[dynamics.controlMode]}`,
     `- current truth: ${game.dir}/state/CURRENT.md`,
-    '- 到达 meaningful choice 时优先调用 `ask_user_question` 给约 5 个行动方向；玩家仍可 custom 输入任何其它行动。'
+    '- 正式游戏中不要用 `ask_user_question` 提供行动建议。停在 meaningful choice 时，在当前叙事回复末尾给约 5 个简短行动方向，并明确玩家可以自由采取其它行动。'
   ]
   if (dynamics.time) lines.push(`- 世界当前时间: ${dynamics.time}`)
   if (dynamics.location) lines.push(`- 主角当前位置: ${dynamics.location}`)
@@ -158,18 +159,16 @@ export function buildRecoveryInjection({ game, source, current, recent, composit
     '',
     `更多内容按需读取 ${game.dir}/story/、${game.dir}/memory/、${game.dir}/saves/ 与 library/ Source。`,
     '以 game-local reality 为准接续游戏；不要重新走 New Game Setup，也不要静默增加未确认的 Expansion。',
-    '当游戏真正停在 meaningful choice 时，优先调用 `ask_user_question` 提供约 5 个快捷行动方向，并保留 custom 自由输入。'
+    '正式游戏恢复后不要用 `ask_user_question` 提供行动建议；停在 meaningful choice 时，在叙事回复末尾用普通文本给约 5 个行动方向，并保留完全自由输入。'
   )
   return lines.join('\n')
 }
 
 export function buildMaintenanceText({ game }) {
   return [
-    '[World Core 回合收尾]',
-    '先检查刚结束的玩家可见叙事：如果它停在一个真正的 meaningful choice，而且本次尚未通过 `ask_user_question` 给玩家快捷行动方向，则调用一次 `ask_user_question`，提供约 5 个简短、彼此有差异的行动方向；玩家仍可 custom 输入其它行动。没有真实选择点或已经给过 GUI，就不要重复提问。',
-    '如果因此收到玩家选择，把它视为玩家的下一行动并自然主持，不要把选项当成系统命令；本次收尾最多补一次此类 GUI。',
-    '随后只检查是否产生了未来仍需存在的 durable change。不要为了维护额外推进世界。',
+    '[World Core 回合维护 — 不要输出面向玩家的内容]',
+    '本轮叙事已经结束。只检查是否产生了未来仍需存在的 durable change。不要继续剧情、不要推进时间，也不要调用 `ask_user_question`。',
     `有 durable change 时更新 ${game.dir}/state/CURRENT.md；值得长期追溯的事件补入 story/LEDGER.md；必要时刷新 memory/RECENT.md。`,
-    '没有 durable change 就不要写文件。除必要的 choice GUI 外，不要输出额外的后台维护说明。'
+    '没有 durable change 就不要写文件。完成后结束本轮。'
   ].join('\n')
 }
