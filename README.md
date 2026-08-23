@@ -79,7 +79,8 @@ The World 必须证明自己比这个基线更值得长期玩，而不是只证�
 2. **Save / Rollback**：当前 workspace 主要保存 latest state，不等于玩家级 checkpoint / rollback；
 3. **Persistent RPG UI**：系统、任务、人物、地图等长期状态不能只靠翻聊天记录；
 4. **Dynamic Entity Persistence**：运行中生成并形成持续关系的 NPC 会被剧情使用，却可能没有进入长期 NPC state；
-5. **Agency Granularity**：GM 有时会从一个宏观意图一次推进过多个本可玩的节点；这不应简单禁止，而应发展为可选择的主角操控粒度。
+5. **Agency Granularity**：GM 有时会从一个宏观意图一次推进过多个本可玩的节点；这不应简单禁止，而应发展为可选择的主角操控粒度；
+6. **Epistemic Boundary / Knowledge Provenance**：GM / Source / System 可访问的知识可能被错误投射为 NPC 自身知识，例如 NPC 无来源知道未来历史人才流向。正式语义：`GM / Source / System knows X != NPC knows X`。详见 [`docs/experiments/GAP_06_EPISTEMIC_BOUNDARY.md`](docs/experiments/GAP_06_EPISTEMIC_BOUNDARY.md)。
 
 ### 当前不急着修的观察项
 
@@ -102,6 +103,14 @@ Persistent != Fully Simulated
 ```
 
 重要性决定叙事注意力与离屏模拟资源，不决定一个已经形成 durable identity 的人物或事实是否存在。
+
+### Knowledge Provenance / Epistemic Boundary
+
+> **GM / Source / System knows X != NPC knows X.**
+
+NPC 的判断应来自世界内合理来源，例如自身经历、身份、可观察事实、被告知内容、传闻或合理推断。GM 后台事实、玩家系统私有信息、穿越者知识和尚未发生的未来历史，不能无来源地借 NPC 的嘴说出来。
+
+这不是要求复杂权限系统；TW-01 优先测试一条极薄的知识边界 guidance 是否足够稳定。
 
 ### Unlimited Attempt, Consequence-bound World
 
@@ -221,6 +230,7 @@ TW-00.5 不重新打开 Product Definition Gate。它的作用是避免在开发
 
 - 多场景长期连续性；
 - 动态 NPC / 承诺 / 势力 / 地点的 durable persistence；
+- NPC knowledge provenance / epistemic boundary；
 - Source 角色卡消费；
 - 三国题材 Source Fidelity；
 - 历史事件与历史偏离；
@@ -288,4 +298,4 @@ README.md
 
 现在正在做的是：
 
-> **继续 Bare DSH 真实试玩，尽可能完整测出强模型 + DSH 的自然上限；只把重复、真实、影响体验的缺口带入 TW-01。**
+> **继续 Bare DSH 真实试玩，尽可能完整测出强模型 + DSH 的自然上限；只把真实、影响体验且值得产品承担的缺口带入 TW-01。**
