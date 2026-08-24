@@ -1,11 +1,11 @@
 ---
 title: The World｜产品与实验总纲
 status: current-canonical-product-spec
-version: 0.5
+version: 0.6
 updated: 2026-08-24
-stage: Reality Gate B / RPG Experience Validation
-previous_stage: TW-01 Minimal World Core + Reality Gate A PASS
-next: Reality Gate B
+stage: Post-Gate-B / Player-facing Save & Restore
+previous_stage: Reality Gate B PASS
+next: Player-facing Save / Restore v0.1
 reference_host: DeepSeek Harness
 ---
 
@@ -253,7 +253,7 @@ Player Agency 不等于每个动作都必须由玩家手操。
 
 - **Full Control**：绝大多数主角行动由玩家明确决定；
 - **Light Delegation**：GM 可按目标、角色卡、性格与计划处理低价值步骤；
-- **Narrative Delegation**：玩家主要决定战略与重大抉择，GM 更积极代行过程行为。
+- **Narrative Delegation**：玩家主要决定目标和重大选择；GM 可按角色人格代行更多过程行为，但重大决策与不可逆行为仍应停下。
 
 共同原则：
 
@@ -423,23 +423,26 @@ TW-01 仍然不把以下内容吸收进 Core：
 
 结果：**PASS（2026-08-24）**。
 
-### Reality Gate B｜CURRENT
+### Reality Gate B｜PASS
 
-Gate B 不问“插件功能够不够多”，而问：
+Gate B 问：
 
 > **至少一个 RPG Experience / Mechanics Plugin 是否在真实游戏中 materially improve 玩家体验。**
 
-当前验收基线：`docs/GATE_B_ACCEPTANCE_v0.1.md`。
+结果：**PASS（2026-08-24）**。
 
-核心条件：
+正式裁定：`docs/experiments/GATE_B_FINAL_2026-08-24.md`。  
+验收基线：`docs/GATE_B_ACCEPTANCE_v0.1.md`。
 
-1. **Material RPG Value**：拔掉插件后玩家会明显觉得体验变差；
+已验证：
+
+1. **Material RPG Value**：Player Experience Redesign 后，玩家人工确认 Panel 已形成明显 RPG 玩家价值；
 2. **Canonical Truth Projection**：UI 投影 workspace truth，不建立第二事实源；
 3. **Player-facing Information Architecture**：页面围绕玩家问题，而不是围绕 Owner 文件；
 4. **Does Not Damage the Game Loop**：不增加明显操作税，不损害 Gate A 已证明的自由 GM 循环；
-5. **Not a Single-save Accident**：至少通过第二 fixture / 极简游戏档证明不是当前三国测试档硬编码。
+5. **Not a Single-save Accident**：第二 fixture 证明不是当前三国测试档硬编码。
 
-当前首个 Gate B vertical：`plugins/the-world-panel`。
+首个成功 RPG Experience vertical：`plugins/the-world-panel`。
 
 ---
 
@@ -456,14 +459,14 @@ Gate B 不问“插件功能够不够多”，而问：
 - 玩家可以改变历史；
 - 已发生分叉不得为了贴回 Source 被静默修正。
 
-当前 `games/luan-shi-sanguo/` 已同时承担 Gate A 长局验证与 Gate B UI vertical 的真实数据源。
+当前 `games/luan-shi-sanguo/` 已完成 Gate A 长局验证与 Gate B UI vertical 的真实验证，并继续作为后续 Save / Restore 的首个真实数据源。
 
 ---
 
 ## 13. Open Questions / Non-blocking
 
-- `the-world-panel` Player Experience Redesign 后是否达到 Gate B 的 Material RPG Value；
-- Save / Undo / Restore 的完整 player-facing surface；
+- Player-facing Save / Restore 完整闭环；
+- Restore 后如何用当前 DSH 公共 client / host seam 显式创建并切换到恢复完成后出生的全新 Session；
 - protagonist control mode 最终 UI binding；
 - Map / Relationship / Faction 等下一批 RPG plugin 的真实优先级；
 - 当前过渡判定层是否最终演化为正式判定机制插件；
@@ -494,13 +497,17 @@ Gate B 不问“插件功能够不够多”，而问：
 - **DEC-P19** Reality Gate A = PASS（2026-08-24，真实长局人工体验裁定）。
 - **DEC-P20** Workspace for Truth, UI for Player Needs：Owner Architecture != Player Information Architecture。
 - **DEC-P21** Gate B = Material RPG Value Gate：插件必须真实改善玩家体验，不以功能数量或技术可行为 PASS 标准。
+- **DEC-P22** Reality Gate B = PASS（2026-08-24，`the-world-panel` Player Experience Redesign 后人工裁定）。
+- **DEC-P23** Restore Requires Fresh Session：恢复 workspace 后，不能继续使用包含未来历史的旧 DSH Session；必须进入恢复完成后新创建的 Session，或明确要求玩家新建 Session。
 
 ---
 
 ## 15. Current Decision
 
-**Product Definition Gate：PASS。TW-00.5：COMPLETE。TW-01 / Reality Gate A：PASS。Reality Gate B：CURRENT。**
+**Product Definition Gate：PASS。TW-00.5：COMPLETE。TW-01 / Reality Gate A：PASS。Reality Gate B：PASS。**
 
 当前正式工作：
 
-> **以 `the-world-panel` 为首个 Gate B vertical，把已经验证可行的 Workspace → UI 投影，从“工作区信息展示器”重构成真正围绕玩家决策、状态查询与沉浸体验组织的 RPG 界面；不借机扩大 World Core 或重建第二套状态源。**
+> **完成 `the-world-panel` 的少量 player-facing presentation cleanup，并实现 Player-facing Save / Restore v0.1：确定性浏览 / 创建 / 恢复 Save Point，恢复前自动建立保护存档；最关键的是 Restore 完成后切换到一个恢复后新出生的 DSH Session，避免旧对话历史污染回档世界。**
+
+执行任务：`docs/experiments/POST_GATE_B_PANEL_CLEANUP_SAVE_RESTORE_KIMICODE_TASK_2026-08-24.md`。
