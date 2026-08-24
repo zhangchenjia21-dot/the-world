@@ -13,5 +13,5 @@
 | [char-mengdai](char-mengdai.md) | 孟岱 | active | 绎幕南路（外道侦巡未归） | 汉军 · 斥候队（外道组） | 同袍 · 托背之交 · 班底候选 | 三月初七 |
 | [char-cenke](char-cenke.md) | 岑恪 | active | 城门 | 汉军 · 城门军候 | 保人（连坐） | 三月初五 |
 | [char-daxiong](char-daxiong.md) | 大熊 | active | 西水门 | 汉军 · 城门守卒 | 公开拥护者 · 酒约 | 三月初十 |
-| [char-bingcaoyuan](char-bingcaoyuan.md) | 兵曹掾（姓名未知） | active | 西营 | 汉军 · 巨鹿郡兵曹 | 叙功已入简 · 暗查直属上官 | 三月初十 |
+| [char-bingcaoyuan](char-bingcaoyuan.md) | 兵曹掾（姓名未知） | active | 西营 | 汉军 · 巨鹿郡兵曹 | 验看主官 · 叙功已入简 | 三月初十 |
 | [char-chengsanyan](char-chengsanyan.md) | 程三眼 | 传闻 | 绎幕城（将攻城） | 黄巾军（渠帅） | 敌对 | 三月初七 |
