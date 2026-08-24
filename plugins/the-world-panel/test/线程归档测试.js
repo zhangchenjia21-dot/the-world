@@ -74,3 +74,13 @@ test('appendToLedger：跨天开新节，不动已有节', () => {
   assert.match(ledger, /## 面板归档 · 2026-08-25/)
   assert.ok(ledger.indexOf('2026-08-24') < ledger.indexOf('2026-08-25'))
 })
+
+test('cutThreadBlock：CRLF 行尾（真实游戏档）也能匹配', () => {
+  // 游戏文件是 CRLF；`.+` 不匹配 \r，曾因缺 \r? 容错导致所有线程 thread-not-found
+  const crlf = THREADS.replace(/\n/g, '\r\n')
+  const cut = cutThreadBlock(crlf, 'T-05')
+  assert.ok(cut)
+  assert.equal(cut.title, '绎幕黄巾即将攻城（倒计时三五日）')
+  assert.doesNotMatch(cut.remaining, /T-05/)
+  assert.match(cut.remaining, /T-03/)
+})

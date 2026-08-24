@@ -10,7 +10,9 @@
 
 export const THREAD_ID_PATTERN = /^[A-Za-z]+-\d+$/
 
-const THREAD_HEADING = /^###\s+([A-Za-z]+-\d+)\s*[｜|]\s*(.+)$/
+// 注意尾部 \r?：游戏文件是 CRLF，按 \n 切行后行尾残留 \r，
+// 而 . 不匹配 \r（line terminator），不写 \r? 会导致 (.+)$ 永远失配。
+const THREAD_HEADING = /^###\s+([A-Za-z]+-\d+)\s*[｜|]\s*(.+?)\r?$/
 
 /**
  * 从 THREADS.md 文本中切出指定线程块。
