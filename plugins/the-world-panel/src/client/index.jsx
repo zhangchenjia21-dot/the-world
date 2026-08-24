@@ -471,6 +471,7 @@ function WorldPanel(props) {
   const visible = props.visible !== false
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
+  const [archiveError, setArchiveError] = useState(null)
   const seq = useRef(0)
 
   const load = () => {
@@ -503,16 +504,24 @@ function WorldPanel(props) {
     return () => es.close()
   }, [isGame, scope?.sessionId, scope?.cwd, visible])
 
-  // DEC-B3 v1.2 窄写口：归档线程（THREADS → LEDGER）。成败都重新拉取，
-  // 由服务端投影给出最终事实（SSE 的 fs.watch 也会兜底刷新）。
+  // DEC-B3 v1.2 窄写口：归档线程（THREADS → LEDGER）。失败必须显式呈现——
+  // 静默吞错会让玩家以为按钮坏了（实际可能是 preset 门 / 线程不存在 / 网络断）。
   const archiveThread = (threadId) => {
+    setArchiveError(null)
     fetch(stateUrl(scope).replace('/state?', '/close-thread?'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ threadId })
     })
-      .catch(() => {})
-      .then(() => load())
+      .then((r) => r.json())
+      .then((r) => {
+        if (!r?.ok) {
+          setArchiveError(`归档 ${threadId} 失败：${r?.error ?? r?.reason ?? '未知响应'}`)
+          return
+        }
+        load()
+      })
+      .catch((e) => setArchiveError(`归档请求未送达：${e?.message ?? e}`))
   }
 
   return h(
@@ -527,6 +536,7 @@ function WorldPanel(props) {
       h('button', { className: 'twp-refresh', title: '刷新', onClick: load }, '⟳')
     ),
     error ? h('div', { className: 'twp-error' }, `面板数据加载失败：${error}`) : null,
+    archiveError ? h('div', { className: 'twp-error' }, archiveError) : null,
     h(PanelBody, { data, onArchive: archiveThread })
   )
 }
@@ -616,11 +626,11 @@ const CSS = `
 .twp-quest-f { margin: 4px 0 2px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
 .twp-quest-f dt { font-size: 11px; color: #6b5a2a; opacity: 0.75; white-space: nowrap; padding-top: 1px; }
 .twp-quest-f dd { margin: 0; line-height: 1.6; }
-.twp-archive { margin-top: 6px; float: right; border: 1px solid #b8860b44; background: none;
-  color: #6b5a2a; opacity: 0.55; font-size: 11px; padding: 1px 10px; border-radius: 999px; cursor: pointer;
+.twp-archive { margin-top: 6px; float: right; border: 1px solid #6b5a2a99; background: #b8860b14;
+  color: #2b2620; font-size: 11.5px; padding: 2px 12px; border-radius: 999px; cursor: pointer;
   font-family: "STKaiti", "KaiTi", serif; letter-spacing: 2px; }
-.twp-archive:hover { opacity: 1; border-color: #9e2b2566; color: #9e2b25; }
-.twp-archive.confirm { opacity: 1; border-color: #9e2b25; color: #f6f1e5; background: #9e2b25; }
+.twp-archive:hover { border-color: #9e2b25; color: #9e2b25; background: #9e2b2512; }
+.twp-archive.confirm { border-color: #9e2b25; color: #f6f1e5; background: #9e2b25; }
 
 .twp-group-h { font-family: "STKaiti", "KaiTi", serif; font-weight: 700; letter-spacing: 3px;
   color: #6b5a2a; font-size: 12.5px; margin: 4px 2px 8px; display: flex; align-items: center; gap: 8px; }

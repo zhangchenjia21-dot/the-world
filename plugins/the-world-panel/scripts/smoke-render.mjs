@@ -96,12 +96,12 @@ const checks = [
   ['meta chip（类型）', joined.includes('玩家角色')],
 ]
 // 切分页：直接把 PanelBody 的 sub hook 置为目标 id 并重渲染
-// hooks 序列：WorldPanel(data,error,seq,eff,eff) + PanelBody(sub) → sub 是 index 5
-hooks[5].v = 'inventory'
+// hooks 序列：WorldPanel(data,error,archiveError,seq,eff,eff) + PanelBody(sub) → sub 是 index 6
+hooks[6].v = 'inventory'
 texts = fullRender(el)
 const invJoined = texts.join('\n')
 checks.push(['物品页-玩家装备（作训服）', invJoined.includes('作训服')], ['物品页-系统空间（金疮药）', invJoined.includes('金疮药')])
-hooks[5].v = 'mechanics'
+hooks[6].v = 'mechanics'
 texts = fullRender(el)
 const mechJoined = texts.join('\n')
 checks.push(
@@ -109,7 +109,7 @@ checks.push(
   ['系统页-任务节已流出（无立足巨鹿）', !mechJoined.includes('立足巨鹿')],
   ['系统页-系统空间已流出（无「当前存放」）', !mechJoined.includes('当前存放')]
 )
-hooks[5].v = 'threads'
+hooks[6].v = 'threads'
 texts = fullRender(el)
 const qJoined = texts.join('\n')
 checks.push(
@@ -119,7 +119,46 @@ checks.push(
   ['任务排序-紧急(T-05)在长期(T-03)前', qJoined.indexOf('绎幕黄巾') > -1 && qJoined.indexOf('绎幕黄巾') < qJoined.indexOf('田石家人')],
   ['任务卡-归档按钮', qJoined.includes('归档')]
 )
-hooks[5].v = 'characters'
+
+// ── 归档按钮点击链路：第一次进确认态，第二次发出 close-thread POST ──
+// 展开函数组件为纯 DOM 树，以便找到按钮并触发其 onClick。
+function expand(node) {
+  if (node === null || node === undefined || typeof node !== 'object') return node
+  if (Array.isArray(node)) return node.map(expand)
+  if (typeof node.type === 'function') return expand(node.type({ ...node.props, children: node.children }))
+  return { ...node, children: expand(node.children) }
+}
+function findByClass(node, cls, out = []) {
+  if (node === null || node === undefined || typeof node !== 'object') return out
+  if (Array.isArray(node)) { for (const n of node) findByClass(n, cls, out); return out }
+  if (String(node.props?.className ?? '').includes(cls)) out.push(node)
+  findByClass(node.children, cls, out)
+  return out
+}
+const fetchCalls = []
+const origFetch = globalThis.fetch
+globalThis.fetch = async (url, opts) => { fetchCalls.push({ url, opts }); return origFetch(url, opts) }
+hookIdx = 0
+let dom = expand(el)
+let archiveBtn = findByClass(dom, 'twp-archive')[0]
+checks.push(['归档按钮可点击', typeof archiveBtn?.props?.onClick === 'function'])
+archiveBtn.props.onClick() // 第一次点击：进入确认态
+hookIdx = 0
+dom = expand(el)
+archiveBtn = findByClass(dom, 'twp-archive')[0]
+const confirmText = []
+renderNode(archiveBtn.children, confirmText)
+checks.push(['归档二步确认态', confirmText.join('').includes('确认归档')])
+archiveBtn.props.onClick() // 第二次点击：触发归档请求
+await new Promise((r) => setTimeout(r, 20))
+const closeCall = fetchCalls.find((c) => String(c.url).includes('/close-thread?'))
+checks.push(
+  ['归档请求发出（close-thread）', Boolean(closeCall)],
+  ['归档请求体含 threadId', Boolean(closeCall?.opts?.body && JSON.parse(closeCall.opts.body).threadId)]
+)
+globalThis.fetch = origFetch
+
+hooks[6].v = 'characters'
 texts = fullRender(el)
 checks.push(['NPC 名册（岑恪卡）', texts.join('\n').includes('岑恪') || texts.join('\n').includes('cenke')])
 checks.push(['游戏态后挂 SSE', esCreated >= 1])
