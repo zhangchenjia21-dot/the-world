@@ -446,7 +446,11 @@ UI 应回答玩家问题，例如：
 - better-sidebar integration 可行；
 - workspace → Node projection → Web UI 可行；
 - `fs.watch + SSE` 的无轮询刷新可行；
-- 窄确定性 Thread 归档写口可行。
+- 窄确定性 Thread 归档写口可行；
+- 确定性 Save / Restore v0.1 可行：`saves/` 快照的浏览 / 手动创建 / 真正 snapshot 恢复
+  （恢复前自动建立 pre-restore 保护档，失败回滚 fail loud）；
+- Restore fresh-session 边界可行：恢复完成后经 `ctx.sessions.create({ workspaceId })` + `open`
+  进入恢复后出生的全新 Session；seam 缺失时降级为显眼的人工新建会话提示，不假装旧 Session 可继续。
 
 当前重点不是继续增加页面，而是完成 Player Experience Redesign：从“Workspace Inspector 的 RPG 皮肤”转成真正以玩家状态、关系、资源、机制和决策为中心的 RPG 界面。
 

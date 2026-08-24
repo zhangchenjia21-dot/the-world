@@ -506,8 +506,8 @@ Gate B 问：
 
 **Product Definition Gate：PASS。TW-00.5：COMPLETE。TW-01 / Reality Gate A：PASS。Reality Gate B：PASS。**
 
-当前正式工作：
+已完成（2026-08-24，`the-world-panel` 0.3.0）：
 
-> **完成 `the-world-panel` 的少量 player-facing presentation cleanup，并实现 Player-facing Save / Restore v0.1：确定性浏览 / 创建 / 恢复 Save Point，恢复前自动建立保护存档；最关键的是 Restore 完成后切换到一个恢复后新出生的 DSH Session，避免旧对话历史污染回档世界。**
+> **Player-facing presentation cleanup（char-\* 显示名映射 / 文件引用剥离 / Hero 压缩 / 装备去重 / 状态本地化）+ Player-facing Save / Restore v0.1：确定性浏览 / 创建 / 恢复 Save Point，恢复前自动建立保护存档，恢复完成后自动切换到恢复后新出生的 DSH Session（seam 缺失时显眼降级为人工新建提示），避免旧对话历史污染回档世界。**
 
 执行任务：`docs/experiments/POST_GATE_B_PANEL_CLEANUP_SAVE_RESTORE_KIMICODE_TASK_2026-08-24.md`。
