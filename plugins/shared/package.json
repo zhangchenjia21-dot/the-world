@@ -1,7 +1,5 @@
 {
-  "name": "the-world-shared",
-  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The World 插件共享模块（DEC-B9）：游戏定位等，以相对路径被 the-world-core / the-world-panel 引用。"
+  "description": "The World 插件共享模块（DEC-B9）：游戏定位等，以相对路径被 the-world-core / the-world-panel 引用。故意不带 name——本目录不是插件也不发布 npm，避免被插件管理器扫描为「未安装插件」。"
 }

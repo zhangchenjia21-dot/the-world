@@ -247,6 +247,14 @@ export function apply(ctx) {
   injectCss()
   const sidebar = ctx.betterSidebar
 
+  // tab 的 scope.cwd 由宿主从客户端列表摘要带出（可选）；缺失时现场补一次，
+  // 避免服务器端会话尚未水合时出现假性 no-cwd。
+  const enrichScope = (scope) => {
+    if (!scope?.sessionId || scope.cwd) return scope
+    const summary = ctx.sessions?.list?.getSnapshot?.()?.byId?.[scope.sessionId]
+    return summary?.cwd ? { ...scope, cwd: summary.cwd } : scope
+  }
+
   ctx.effect(
     () =>
       sidebar.registerTab({
@@ -255,7 +263,7 @@ export function apply(ctx) {
         icon: (size) => h('span', { style: { fontSize: size }, role: 'img', 'aria-label': '世界' }, '🗺️'),
         order: 5,
         single: true,
-        component: (props) => h(WorldPanel, props)
+        component: (props) => h(WorldPanel, { ...props, scope: enrichScope(props.scope) })
       }),
     'the-world-panel: tab'
   )
@@ -277,7 +285,9 @@ export function apply(ctx) {
       fetch(stateUrl({ sessionId, cwd: summary.cwd }))
         .then((r) => r.json())
         .then((d) => {
-          if (d?.game) sidebar.openTab({ type: TAB_ID }, { sessionId })
+          // 带 path 的 content open：宿主约定它必须「落入视野」——面板折叠时自动展开
+          // （纯 type open 永不展开）。path 对本 tab 仅为元数据（指向会话工作区）。
+          if (d?.game) sidebar.openTab({ type: TAB_ID, path: summary.cwd, meta: { game: d.game.id } }, { sessionId, cwd: summary.cwd })
         })
         .catch(() => {})
         .finally(() => {

@@ -49,8 +49,9 @@ node plugins/the-world-panel/scripts/deploy.mjs
 ## 已知限制
 
 - preset 常驻挂载发生在首个 the-world 会话 attach 时；页面需在其后刷新一次才能加载面板 bundle；
-- `openTab` 是 type-only open：侧栏面板已展开时 tab 直接顶入视野；面板折叠时 tab 已创建并聚焦，
-  但展开动作属于宿主面板自身（外部插件无公开 API 强制展开）；
+- 自动打开使用带 `path` 的 content open（宿主约定：content open 必须落入视野，面板折叠时自动展开）；
+  手动从 + 菜单打开的纯 type open 不强制展开面板；
+- 面板只在 the-world preset 会话中呈现数据；standard preset 会话显示空闲提示（DEC-B1 / AC-6）；
 - better-sidebar 未启用时本插件 fiber 永久等待其服务（cordis inject 语义）：不报错、不崩 DSH，
   面板静默缺席；
 - Web-only（DEC-B8）；CLI 平面无 webServer，Node 半静默不注册路由。
