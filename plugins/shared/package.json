@@ -1,0 +1,7 @@
+{
+  "name": "the-world-shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The World 插件共享模块（DEC-B9）：游戏定位等，以相对路径被 the-world-core / the-world-panel 引用。"
+}

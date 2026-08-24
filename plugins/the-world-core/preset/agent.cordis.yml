@@ -23,6 +23,17 @@
     maxFileChars: 12000
     maintenance: true
 
+# the-world-panel：Gate B 只读游戏面板（better-sidebar 宿主）。
+# 用包名而非绝对路径：DSH client module 扫描以包名解析 package.json 的
+# dsh.client 声明（要求 profile 与部署根 node_modules 存在同名 junction，
+# 由 plugins/the-world-panel/scripts/deploy.mjs 建立）。无 Web 宿主的平面
+#（check-preset / CLI）中插件软取 webServer 失败、静默不注册路由。
+- id: the-world-panel
+  name: 'the-world-panel'
+  config:
+    gamesDir: games
+    presetId: the-world
+
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
   config:

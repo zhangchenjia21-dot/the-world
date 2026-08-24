@@ -138,6 +138,10 @@ Gate A 后优先验证至少一个真正 RPG 专用插件，例如：
 
 这些插件由**产品价值**驱动，不要求先证明模型失败。
 
+### the-world-panel｜CURRENT（Gate B 首插件）
+
+只读游戏面板（DSH Web 侧边栏「世界」tab，以 `dsh-better-sidebar` 为宿主）：角色 / 人物 / 物品系统 / 任务四分页，数据经 Node 半从 game workspace 的四个稳定 Owner（`state/PLAYER.md`、`state/characters/`、`mechanics/<id>/STATE.md`、`state/THREADS.md`）投影。**永远只读**：UI 是 game truth projection，不存在写回路径。裁定全文见 `Vibe-Coding/the-world/GateB_首个RPG体验插件与游戏面板裁定_v1.1_2026-08-24.md`（DEC-B1~B10）。
+
 ---
 
 ## 4. RPG UI Core Principle

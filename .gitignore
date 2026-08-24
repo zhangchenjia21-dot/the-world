@@ -19,3 +19,8 @@ Thumbs.db
 .tmp/
 tmp/
 *.log
+
+# 前端构建链（DEC-B5）：产物与依赖不提交
+node_modules/
+plugins/the-world-panel/lib/client.js
+plugins/the-world-panel/lib/client.js.map

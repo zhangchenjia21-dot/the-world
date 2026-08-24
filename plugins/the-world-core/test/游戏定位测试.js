@@ -15,7 +15,7 @@ import {
   normalizeControlMode,
   readSavePolicyInterval,
   DEFAULT_CONTROL_MODE
-} from '../lib/游戏定位.js'
+} from '../../shared/游戏定位.js'
 
 function 建临时目录() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'tw-test-'))

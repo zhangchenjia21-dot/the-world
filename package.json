@@ -1,0 +1,11 @@
+{
+  "name": "the-world-dev",
+  "private": true,
+  "description": "The World 仓库开发链（DEC-B5：前端构建链进仓库，tsdown 对齐 DSH）。",
+  "devDependencies": {
+    "tsdown": "^0.22.2"
+  },
+  "scripts": {
+    "build:panel": "npm --prefix plugins/the-world-panel run build"
+  }
+}

@@ -17,7 +17,7 @@ import {
   readCompositionStatus,
   readSavePolicyInterval,
   COMPOSITION_FILE
-} from './游戏定位.js'
+} from '../../shared/游戏定位.js'
 import {
   GAME_MODE_SECTION_TEXT,
   buildDynamicContext,

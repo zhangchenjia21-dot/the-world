@@ -1,0 +1,6 @@
+# the-world-panel bundle patch：向 profile 组合插入宿主行（备用安装路径）。
+# 正式挂载走 the-world preset（agent.cordis.yml 的 the-world-panel 行）；
+# 本文件仅用于 profile bundle 安装方式与 custom-plugin-manager 的启停滑块。
+- insert:
+    - id: the-world-panel
+      name: the-world-panel
