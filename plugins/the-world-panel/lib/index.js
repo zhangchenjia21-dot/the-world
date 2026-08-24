@@ -200,7 +200,8 @@ function projectGame(game, maxChars) {
   const player = file('state', 'PLAYER.md')
   const threads = file('state', 'THREADS.md')
   const composition = file('COMPOSITION.md')
-  for (const item of [player, threads, composition]) {
+  const current = file('state', 'CURRENT.md')
+  for (const item of [player, threads, composition, current]) {
     if (typeof item?.mtime === 'number') mtimes.push(item.mtime)
   }
 
@@ -209,6 +210,7 @@ function projectGame(game, maxChars) {
     player,
     threads,
     composition,
+    current,
     charactersIndex,
     characters,
     mechanics
