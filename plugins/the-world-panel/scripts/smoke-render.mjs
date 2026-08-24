@@ -116,7 +116,8 @@ checks.push(
   ['任务页-世界线程 T-03', qJoined.includes('田石家人生死未卜')],
   ['任务页-紧急徽章', qJoined.includes('紧急')],
   ['任务页-系统任务组（立足巨鹿）', qJoined.includes('立足巨鹿')],
-  ['任务排序-紧急(T-05)在长期(T-03)前', qJoined.indexOf('绎幕黄巾') > -1 && qJoined.indexOf('绎幕黄巾') < qJoined.indexOf('田石家人')]
+  ['任务排序-紧急(T-05)在长期(T-03)前', qJoined.indexOf('绎幕黄巾') > -1 && qJoined.indexOf('绎幕黄巾') < qJoined.indexOf('田石家人')],
+  ['任务卡-归档按钮', qJoined.includes('归档')]
 )
 hooks[5].v = 'characters'
 texts = fullRender(el)

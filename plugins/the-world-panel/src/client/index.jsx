@@ -311,7 +311,8 @@ function questTone(status) {
   return 'open'
 }
 
-function QuestCard({ quest }) {
+function QuestCard({ quest, onArchive }) {
+  const [confirming, setConfirming] = useState(false)
   const status = quest.fields['状态'] ?? ''
   const rest = Object.entries(quest.fields).filter(([k]) => k !== '状态')
   return h(
@@ -330,7 +331,26 @@ function QuestCard({ quest }) {
           { className: 'twp-quest-f' },
           rest.flatMap(([k, v]) => [h('dt', { key: `k${k}` }, k), h('dd', { key: `v${k}` }, renderInline(v, `q${k}`))])
         )
-      : h(Markdown, { text: quest.raw })
+      : h(Markdown, { text: quest.raw }),
+    // DEC-B3 v1.2 窄写口：归档不是删除，线程块移入 story/LEDGER.md 可追溯
+    onArchive && quest.id
+      ? h(
+          'button',
+          {
+            className: `twp-archive${confirming ? ' confirm' : ''}`,
+            title: '归档该线程：从任务列表移入故事台账（LEDGER），不是删除',
+            onClick: () => {
+              if (!confirming) {
+                setConfirming(true)
+                return
+              }
+              setConfirming(false)
+              onArchive(quest.id)
+            }
+          },
+          confirming ? '确认归档？' : '归档'
+        )
+      : null
   )
 }
 
@@ -346,7 +366,7 @@ function SystemQuestRow({ bullet, mech }) {
   )
 }
 
-function QuestPanel({ threadsText, mechanicQuests }) {
+function QuestPanel({ threadsText, mechanicQuests, onArchive }) {
   const worldQuests = parseQuests(threadsText)
   const systemBullets = mechanicQuests.flatMap(({ mech, section }) =>
     (bulletsOf(section.text) ?? []).map((bullet) => ({ mech, bullet }))
@@ -364,7 +384,7 @@ function QuestPanel({ threadsText, mechanicQuests }) {
           'div',
           null,
           h('div', { className: 'twp-group-h' }, '世界线程'),
-          sortQuests(worldQuests).map((q, i) => h(QuestCard, { key: q.id || i, quest: q }))
+          sortQuests(worldQuests).map((q, i) => h(QuestCard, { key: q.id || i, quest: q, onArchive }))
         )
       : h(Markdown, { text: threadsText }),
     sortedSystem.length
@@ -391,7 +411,7 @@ function formatTime(ms) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function PanelBody({ data }) {
+function PanelBody({ data, onArchive }) {
   const [sub, setSub] = useState('player')
   if (!data?.game) {
     return h('div', { className: 'twp-idle' }, '当前会话不是已确认的 The World 游戏局（或工作目录不在游戏工作区）。')
@@ -430,7 +450,7 @@ function PanelBody({ data }) {
       systems.map((m) => h(MechanicCard, { key: m.id, mech: m, defaultOpen: systems.length === 1 }))
     )
   } else {
-    content = h(QuestPanel, { threadsText: data.threads?.text, mechanicQuests: quests })
+    content = h(QuestPanel, { threadsText: data.threads?.text, mechanicQuests: quests, onArchive })
   }
   return h(
     'div',
@@ -483,6 +503,18 @@ function WorldPanel(props) {
     return () => es.close()
   }, [isGame, scope?.sessionId, scope?.cwd, visible])
 
+  // DEC-B3 v1.2 窄写口：归档线程（THREADS → LEDGER）。成败都重新拉取，
+  // 由服务端投影给出最终事实（SSE 的 fs.watch 也会兜底刷新）。
+  const archiveThread = (threadId) => {
+    fetch(stateUrl(scope).replace('/state?', '/close-thread?'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ threadId })
+    })
+      .catch(() => {})
+      .then(() => load())
+  }
+
   return h(
     'div',
     { className: 'twp-root' },
@@ -495,7 +527,7 @@ function WorldPanel(props) {
       h('button', { className: 'twp-refresh', title: '刷新', onClick: load }, '⟳')
     ),
     error ? h('div', { className: 'twp-error' }, `面板数据加载失败：${error}`) : null,
-    h(PanelBody, { data })
+    h(PanelBody, { data, onArchive: archiveThread })
   )
 }
 
@@ -584,6 +616,11 @@ const CSS = `
 .twp-quest-f { margin: 4px 0 2px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
 .twp-quest-f dt { font-size: 11px; color: #6b5a2a; opacity: 0.75; white-space: nowrap; padding-top: 1px; }
 .twp-quest-f dd { margin: 0; line-height: 1.6; }
+.twp-archive { margin-top: 6px; float: right; border: 1px solid #b8860b44; background: none;
+  color: #6b5a2a; opacity: 0.55; font-size: 11px; padding: 1px 10px; border-radius: 999px; cursor: pointer;
+  font-family: "STKaiti", "KaiTi", serif; letter-spacing: 2px; }
+.twp-archive:hover { opacity: 1; border-color: #9e2b2566; color: #9e2b25; }
+.twp-archive.confirm { opacity: 1; border-color: #9e2b25; color: #f6f1e5; background: #9e2b25; }
 
 .twp-group-h { font-family: "STKaiti", "KaiTi", serif; font-weight: 700; letter-spacing: 3px;
   color: #6b5a2a; font-size: 12.5px; margin: 4px 2px 8px; display: flex; align-items: center; gap: 8px; }

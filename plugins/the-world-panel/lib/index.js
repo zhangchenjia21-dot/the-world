@@ -5,7 +5,9 @@
  * （state/PLAYER.md、state/characters/、mechanics/<id>/STATE.md、state/THREADS.md）
  * 投影为 JSON，并用 fs.watch + SSE 提供「回合结束后刷新」信号。
  *
- * 硬边界（DEC-B3）：本模块对游戏文件只有读取，不存在任何写路径；
+ * 硬边界（DEC-B3 v1.2）：本模块对游戏文件以投影（只读）为主，唯一例外是
+ * /close-thread 窄写口——把指定线程块从 state/THREADS.md 移入 story/LEDGER.md
+ * （归档而非删除），不经模型。除此之外不存在任何写路径；
  * 只投影活档案（state/ 与 mechanics/ 的当前文件），不读 saves/ 历史快照。
  *
  * 挂载方式：the-world preset 行（agent.cordis.yml）。不硬 inject webServer——
@@ -17,6 +19,7 @@ import path from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { resolveSessionPreset } from '@deepseek-ai/dsh-agent-presets'
 import { resolveGame, readBounded } from '../../shared/游戏定位.js'
+import { cutThreadBlock, appendToLedger, archiveEntry, LEDGER_SEED, THREAD_ID_PATTERN } from './线程归档.js'
 
 export const name = 'the-world-panel'
 export const inject = []
@@ -39,6 +42,71 @@ function sendJson(res, status, value) {
     'cache-control': 'no-cache'
   })
   res.end(body)
+}
+
+/** 有界读取请求体（字符），超限返回 null。close-thread 的负载只有一个 threadId，4KB 足够。 */
+function readBodyBounded(req, maxChars = 4096) {
+  return new Promise((resolve) => {
+    let body = ''
+    req.on('data', (chunk) => {
+      body += chunk
+      if (body.length > maxChars) {
+        resolve(null)
+        req.destroy()
+      }
+    })
+    req.on('end', () => resolve(body))
+    req.on('error', () => resolve(null))
+  })
+}
+
+/** 本地日历日（YYYY-MM-DD），作为归档节日期。 */
+function localDateString(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+/** DEC-B3 v1.2 唯一窄写口：把线程从 state/THREADS.md 归档进 story/LEDGER.md。
+ *  归档是「移动」而非「删除」——线程块全文进 LEDGER，THREADS 里只移除该块。 */
+async function handleCloseThread(config, game, req, res) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { ok: false, error: 'method-not-allowed' })
+    return
+  }
+  const body = await readBodyBounded(req)
+  let threadId = null
+  try {
+    threadId = body ? JSON.parse(body)?.threadId : null
+  } catch {
+    // 非法 JSON 落入下面的 400
+  }
+  if (typeof threadId !== 'string' || !THREAD_ID_PATTERN.test(threadId)) {
+    sendJson(res, 400, { ok: false, error: 'invalid-thread-id' })
+    return
+  }
+
+  const threadsPath = path.join(game.dir, 'state', 'THREADS.md')
+  const bounded = readBounded(threadsPath, config.maxFileChars * 4)
+  if (!bounded || bounded.truncated) {
+    sendJson(res, 404, { ok: false, error: 'threads-not-found' })
+    return
+  }
+  const cut = cutThreadBlock(bounded.text, threadId)
+  if (!cut) {
+    sendJson(res, 404, { ok: false, error: 'thread-not-found' })
+    return
+  }
+
+  const ledgerPath = path.join(game.dir, 'story', 'LEDGER.md')
+  const ledgerBounded = readBounded(ledgerPath, config.maxFileChars * 8)
+  const ledgerText = ledgerBounded?.text ?? LEDGER_SEED
+  const dateStr = localDateString()
+  const nextLedger = appendToLedger(ledgerText, archiveEntry(cut, dateStr), dateStr)
+
+  fs.writeFileSync(threadsPath, cut.remaining, 'utf8')
+  fs.mkdirSync(path.dirname(ledgerPath), { recursive: true })
+  fs.writeFileSync(ledgerPath, nextLedger, 'utf8')
+  sendJson(res, 200, { ok: true, threadId })
 }
 
 /** 会话 cwd 解析（对齐 better-sidebar 的 sessionCwdOf 语义）：会话 header 优先，
@@ -233,6 +301,10 @@ export function apply(ctx, config) {
         return
       }
 
+      if (url.pathname.endsWith('/close-thread')) {
+        await handleCloseThread(config, game, req, res)
+        return
+      }
       if (url.pathname.endsWith('/events')) {
         handleEvents(ctx, config, game, req, res)
         return

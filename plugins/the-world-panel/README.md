@@ -1,21 +1,26 @@
-# the-world-panel｜The World 只读游戏面板
+# the-world-panel｜The World 游戏面板
 
-Gate B 首个 RPG 体验插件：DSH Web 侧边栏中的只读游戏面板（角色 / 人物 / 物品系统 / 任务四分页），以 `dsh-better-sidebar` 为宿主（`ctx.betterSidebar` 的 `registerTab` / `openTab`），数据经插件 Node 半从 game workspace 投影。
+Gate B 首个 RPG 体验插件：DSH Web 侧边栏中的游戏面板（角色 / 人物 / 物品 / 系统 / 任务分页），以 `dsh-better-sidebar` 为宿主（`ctx.betterSidebar` 的 `registerTab` / `openTab`），数据经插件 Node 半从 game workspace 投影。
 
-裁定全文：`Vibe-Coding/the-world/GateB_首个RPG体验插件与游戏面板裁定_v1.1_2026-08-24.md`（DEC-B1~B10）。
+裁定全文：`Vibe-Coding/the-world/GateB_首个RPG体验插件与游戏面板裁定_v1.2_2026-08-24.md`（DEC-B1~B10）。
 
-## 硬边界（DEC-B3）
+## 硬边界（DEC-B3 v1.2）
 
-- **永远只读**：面板到游戏文件之间不存在任何写调用，UI 无编辑 / 写回入口；
+- **投影只读 + 唯一窄写口**：面板到游戏文件之间除 `/close-thread` 外不存在任何写调用；
+  `/close-thread` 只做一件事——把指定线程块从 `state/THREADS.md` 移入 `story/LEDGER.md`
+  （归档而非删除，内容可追溯），不经模型；
 - 只投影活档案（`state/`、`mechanics/`、`COMPOSITION.md` 当前文件），不读 `saves/` 快照；
-- 不为面板新增游戏数据文件或改变任何 Owner 文件格式。
+- 不为面板新增游戏数据文件或改变任何 Owner 文件格式（归档写口只移动既有线程块）。
 
 ## 结构
 
 ```text
 lib/index.js          Node 半（手维护 ESM 源码）：/the-world/panel 前缀路由
-                      ├─ state   GET → 四分页 JSON 投影
-                      └─ events  GET → SSE（fs.watch 驱动，回合结束后刷新；无轮询）
+                      ├─ state        GET  → 分页 JSON 投影
+                      ├─ events       GET  → SSE（fs.watch 驱动，回合结束后刷新；无轮询）
+                      └─ close-thread POST → 线程归档（DEC-B3 v1.2 唯一窄写口）
+lib/线程归档.js        归档纯函数（THREADS 切块 / LEDGER 追加；不依赖 cordis，可直接测）
+test/线程归档测试.js   node:test 覆盖切块、起卷、并入当天节、幂等
 src/client/index.jsx  浏览器半源码：唯一接触 ctx.betterSidebar 的适配模块 + 面板组件
 lib/client.js         构建产物（tsdown，不提交；__ModuleLoader__ 惰性 CJS 格式）
 ```
@@ -32,6 +37,9 @@ npm run build:panel
 ## 验证
 
 ```bash
+# 纯函数单元测试（不依赖宿主）
+node --test plugins/the-world-panel/test/*.js
+
 # 渲染冒烟（需要 DSH Web 在 3080 运行；mini-react stub 驱动真实投影数据，不走浏览器）
 node plugins/the-world-panel/scripts/smoke-render.mjs
 ```
