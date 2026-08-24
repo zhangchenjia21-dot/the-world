@@ -1,12 +1,16 @@
 ---
 title: The World｜Reality Gate B Acceptance
-status: current
+status: complete-pass
 version: 0.1
 updated: 2026-08-24
-stage: Gate B / RPG Experience Validation
+stage: Gate B COMPLETE
+final: experiments/GATE_B_FINAL_2026-08-24.md
 ---
 
 # Reality Gate B｜Acceptance v0.1
+
+> **Final Decision：PASS（2026-08-24）**  
+> 正式结论见：`docs/experiments/GATE_B_FINAL_2026-08-24.md`。
 
 ## 0. Question
 
@@ -66,6 +70,8 @@ Player-facing View Model 不是第二事实源；它不持久化新事实，只�
 
 价值可以来自状态查询、决策效率、沉浸感、机制可见性或操作减负；不能只来自“看起来更漂亮”。
 
+**Final：PASS。** 玩家人工确认 Player Experience Redesign 后面板已经形成明显 RPG 玩家价值。
+
 ### B2｜Canonical Truth Projection
 
 UI 必须投影当前 game workspace truth：
@@ -83,6 +89,8 @@ UI 必须投影当前 game workspace truth：
 2. 语义确定，不需要 GM 创作判断；
 3. 对 canonical Owner 的变化可追溯；
 4. 不把 UI 变成第二状态数据库。
+
+**Final：PASS。**
 
 ### B3｜Player-facing Information Architecture
 
@@ -106,6 +114,8 @@ UI 的页面与视觉层级必须围绕玩家问题，而不是围绕文件路�
 - mechanic loader / implementation metadata。
 
 开发信息可以保留在 debug / inspect 层，但不得占据 RPG 主界面。
+
+**Final：PASS。** 仍有少量 presentation polish，转入 Gate B 后正常产品迭代，不再构成 Gate blocker。
 
 ### B4｜Does Not Damage the Game Loop
 
@@ -137,6 +147,8 @@ GM 才能继续叙事
 
 Persistent UI 应主要减少查询负担，而不是制造操作税。
 
+**Final：PASS。**
+
 ### B5｜Not a Single-save Accident
 
 插件至少需要证明它依赖稳定 Workspace Contract，而不是硬编码当前三国测试档。
@@ -151,31 +163,31 @@ Persistent UI 应主要减少查询负担，而不是制造操作税。
 
 不要求为 Gate B 再完整游玩第二个长期世界。
 
+**Final：PASS。** 第二 fixture 已覆盖上述核心退化路径。
+
 ---
 
-## 3. Current Gate B Vertical｜the-world-panel
+## 3. Gate B Vertical｜the-world-panel
 
-当前首个验证对象：`plugins/the-world-panel`。
+首个验证对象：`plugins/the-world-panel`。
 
-它已经证明的技术基础包括：
+已证明：
 
 - DSH Web RPG plugin 路线可行；
 - `dsh-better-sidebar` 宿主集成可行；
-- game workspace → Node projection → Web UI 可行；
+- game workspace → Node projection → Player-facing View Model → Web UI 可行；
 - `fs.watch + SSE` 的实时刷新可行；
-- 一个窄确定性 Thread 归档写口可行。
+- 一个窄确定性 Thread 归档写口可行；
+- UI 页面不必与 Owner 文件一一对应；
+- 概览 / 角色 / 人物 / 行囊 / 事务 / 系统可以从同一 canonical workspace 组合出玩家信息架构。
 
-当前最重要的剩余问题不是继续增加页面，而是：
-
-> **从 Workspace Inspector 的 RPG 皮肤，转成真正以玩家体验组织的信息界面。**
-
-当前实现任务：`docs/experiments/GATE_B_PANEL_PLAYER_EXPERIENCE_REDESIGN_KIMICODE_TASK_2026-08-24.md`。
+关键实现：commit `278845e994add1cfff417a8dd2750988ca7e4391`。
 
 ---
 
 ## 4. Non-blockers
 
-以下能力不作为 Gate B PASS 前置：
+以下能力从未作为 Gate B PASS 前置，因此 Gate B 通过后继续按真实产品价值迭代：
 
 - Map；
 - Save / Restore UI；
@@ -193,16 +205,14 @@ Gate B 的任务是证明**RPG plugin 方向值得继续投资**，不是宣布�
 
 ---
 
-## 5. PASS Decision
+## 5. Final Decision
 
-Gate B 最终由真实试玩人工裁定。
+**Reality Gate B：PASS。**
 
-推荐问题：
+Gate B 通过后不再反复追加功能来“证明 Gate B”。
 
-1. 我是否会自然打开并依赖这个 UI，而不是为了测试才打开？
-2. 它是否明显减少我向 GM 反复询问已有状态？
-3. 它是否让我更快理解当前局面并做决定？
-4. 关掉它以后，我是否明显觉得少了一个真正的 RPG 界面？
-5. 它是否仍然保持 Workspace truth 单一来源和自由的 Chat 游戏循环？
+下一项已确定的高价值产品工作：
 
-这些问题整体明确为“是”，且 B1–B5 没有 blocker，即可判定 **Reality Gate B PASS**。
+> **Panel presentation cleanup + Player-facing Save / Restore v0.1。**
+
+任务书：`docs/experiments/POST_GATE_B_PANEL_CLEANUP_SAVE_RESTORE_KIMICODE_TASK_2026-08-24.md`。
