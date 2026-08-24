@@ -1,45 +1,34 @@
-# Current Game State
+# TODO｜Current State（Resume Anchor）
 
-> 这是本局恢复时的第一 canonical 入口。只记录会影响后续世界判断、互动、规则或恢复的 durable facts。
+> 本文件只回答一个问题：**换一个全新 Session，它首先需要知道什么，才能立刻继续这一幕？**
+> 一个事实只有一个 Owner：玩家状态 → PLAYER.md；悬而未决 → THREADS.md；人物 → characters/；机制数值 → ../mechanics/；历史 → ../story/LEDGER.md。
 
-## Time
+## 时间
 
-- Current time / date: `TODO`
+- 时间: `TODO`
+- 操控模式: `TODO`（full-control / light-delegation / narrative-delegation）
 
-## Player
+## 当前位置与场景
 
-- Identity: `TODO`
-- Current location: `TODO`
-- Current condition: `TODO`
-- Important inventory / resources: `TODO`
+- 当前位置: `TODO`
+- `TODO`（含公开大势摘要数行；细节指向 Source）
 
-## Current Scene
+## 玩家眼前的人
 
-- Place: `TODO`
-- Situation: `TODO`
-- Present characters: `TODO`
-- Immediate pressure / opportunity: `TODO`
+- `TODO`（引用 characters/ 档案链接）
 
-## Characters
+## 刚刚发生什么
 
 - `TODO`
 
-## Factions / Groups
+## 当前最直接的问题 / 选择
 
 - `TODO`
 
-## Durable Relationships / Commitments
+## 相关文档
 
-- `TODO`
-
-## World State
-
-- `TODO`
-
-## Open Consequences
-
-- `TODO`
-
-## Notes for Splitting
-
-当本文件真实变得过大时，再把 Character / Scene / Faction 等拆成独立文件，并让本文件变成 current index。不要提前为了形式拆分。
+- 玩家状态 → [PLAYER.md](PLAYER.md)
+- 悬而未决 → [THREADS.md](THREADS.md)
+- 人物名录 → [characters/INDEX.md](characters/INDEX.md)
+- 机制清单 → [../mechanics/README.md](../mechanics/README.md)
+- 历史台账 → [../story/LEDGER.md](../story/LEDGER.md)

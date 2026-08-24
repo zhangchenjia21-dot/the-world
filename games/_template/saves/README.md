@@ -1,22 +1,20 @@
-# saves｜恢复点与分支
+# saves｜恢复点
 
-这里保存明确可恢复的游戏现场或其元数据。
+明确的存档恢复点。语义：**玩家可以回滚到的历史快照**。
 
-Stage 0 不冻结具体实现。
+- Persistent State（state/、mechanics/、story/、memory/）由后台 maintenance 持续维护，与存档策略无关；
+- Save Point（本目录）按 COMPOSITION.md「存档策略」建立。
 
-可能的未来方式：
+## 快照格式
 
-- snapshot 目录；
-- Git commit / tag；
-- Git branch；
-- 专用 snapshot helper。
-
-每个 save 至少应能回答：
-
-- 它对应哪个 game；
-- 何时创建；
-- 为什么值得保存；
-- 如何恢复；
-- 恢复后哪些文件构成 current state。
+```text
+SAVE-xxxx/
+├─ META.md          # 回合数 / 游戏内日期 / 触发原因（auto-turn · auto-milestone · manual · archive）
+├─ COMPOSITION.md
+├─ state/
+├─ mechanics/
+├─ story/
+└─ memory/
+```
 
 不要把 `saves/` 当成第二个 live state。

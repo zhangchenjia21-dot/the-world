@@ -16,11 +16,13 @@
 three-kingdoms_liubei-001/
 ```
 
-每局至少包含：
+工作区结构遵循 Game Workspace Architecture v0.2（见 `docs/GAME_WORKSPACE_ARCHITECTURE_v0.2.md`）：
 
 ```text
 README.md
-state/
+COMPOSITION.md      # 玩家确认的配置（含存档策略）
+state/              # CURRENT（恢复锚点）· PLAYER · THREADS · characters/（+按需 WORLD/organizations/places）
+mechanics/          # 本局机制运行状态（按需建档）
 story/
 memory/
 saves/
@@ -29,8 +31,9 @@ saves/
 核心规则：
 
 - Game-local truth 不反写 `library/`；
-- `state/` 是 current reality 的主要 Owner；
-- `story/` 保存重要历史，不替代 current state；
+- 一个事实只有一个 Owner；Core 文件固定存在，实体与机制状态按需生成；
+- `state/` 是 current reality；`story/` 保存重要历史，不替代 current state；
 - `memory/` 用于上下文压缩，不替代 canonical facts；
-- `saves/` 保存明确恢复点；
+- `saves/` 保存明确恢复点（Persistent State ≠ Save Point）；
+- 人物实体只存一次、分类全部变成属性；INDEX 是派生视图；
 - 一局可以自然长出 Source 中不存在的新人物、地点、势力与关系。

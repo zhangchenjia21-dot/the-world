@@ -7,7 +7,7 @@
 - `recent.md` — 最近若干回合高密度摘要；
 - `long-term.md` — 已稳定的长期背景；
 - `retrieval-index.md` — 哪些主题应去哪里追溯；
-- `npcs/` — 重要 NPC 的局部长期记忆。
+- `characters/` — 重要人物的局部长期记忆（实体真相仍在 `state/characters/`）。
 
 原则：
 

@@ -1,8 +1,8 @@
 ---
 title: The World｜DSH-native RPG 工作架构
 status: current-experimental-architecture
-version: 0.4
-updated: 2026-08-23
+version: 0.5
+updated: 2026-08-24
 canonical_product_spec: PRODUCT_SPEC_CURRENT.md
 reference_host: DeepSeek Harness
 current_stage: TW-01 Minimal World Core
@@ -267,45 +267,35 @@ World Core responsibility
 
 ## 5. Game Workspace
 
-建议第一版保持 Markdown-first：
+现行规范：[GAME_WORKSPACE_ARCHITECTURE_v0.2.md](GAME_WORKSPACE_ARCHITECTURE_v0.2.md)（v0.1 已归档至 docs/archive/）。
+
+工作区同时服务三个消费者：**Agent 恢复世界 · 后台维护 · RPG UI 投影**。
 
 ```text
 games/<game-id>/
 ├─ README.md
+├─ COMPOSITION.md          # 玩家确认的配置（含存档策略）
 ├─ state/
-│  └─ CURRENT.md
-├─ story/
-│  └─ LEDGER.md
-├─ memory/
-│  └─ RECENT.md
-└─ saves/
+│  ├─ CURRENT.md           # Resume Anchor：换 Session 立刻续幕所需的最小事实
+│  ├─ PLAYER.md            # 玩家角色：身份/身体/装备/社会身份/知识边界
+│  ├─ WORLD.md             # 按需：本局世界态势第一次偏离 Source 时建立
+│  ├─ THREADS.md           # 悬而未决：承诺/后果/线索/债务/deadline（只装 open）
+│  ├─ characters/          # 人物实体（扁平+frontmatter+INDEX，含 source 人物）
+│  ├─ organizations/       # 按需：产生 game-local durable truth 才实例化
+│  └─ places/              # 按需：同上
+├─ mechanics/              # 本局机制运行状态（README 清单 + <机制>/STATE.md 按需）
+├─ story/                  # LEDGER：重要历史与已归档线程
+├─ memory/                 # RECENT：压缩记忆
+└─ saves/                  # 恢复点（Persistent State ≠ Save Point）
 ```
 
-达到真实规模压力后再拆 characters / factions / locations / quests / mechanics。
+核心约定：
 
-### `state/`
-
-回答：**这局现在真实是什么。**
-
-### `story/`
-
-回答：**发生过哪些未来值得追溯的事情。**
-
-不是 current state 第二副本。
-
-### `memory/`
-
-回答：**下一次高质量主持最值得恢复什么。**
-
-允许压缩和重写，不覆盖 current truth。
-
-### `saves/`
-
-语义：**明确可恢复到的游戏现场。**
-
-第一版具体实现仍开放。
-
----
+- **Core 文件固定存在；实体与机制状态按需生成。**
+- **一个事实只有一个 Owner。**
+- **实体只存一次，分类全部变成属性；INDEX 是派生视图，可重建。**
+- Expansion Pack 只声明「哪些事实值得长期记住」，存到哪里由 World Core 决定。
+- 保持 Markdown-first；不建完整 Entity Schema / JSON DB / Universal Manifest。
 
 ## 6. Recovery Model
 

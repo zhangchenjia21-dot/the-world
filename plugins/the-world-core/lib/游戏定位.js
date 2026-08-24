@@ -109,7 +109,9 @@ export function parseCurrentFields(currentText) {
   if (!currentText) return {}
 
   const time = extractField(currentText, /^[-*]\s*Current time\s*\/\s*date\s*[:：]\s*(.+)$/im)
+    ?? extractField(currentText, /^[-*]\s*时间\s*[:：]\s*(.+)$/im)
   const location = extractField(currentText, /^[-*]\s*Current location\s*[:：]\s*(.+)$/im)
+    ?? extractField(currentText, /^[-*]\s*当前位置\s*[:：]\s*(.+)$/im)
   const controlRaw = extractField(currentText, /^[-*]\s*Control mode\s*[:：]\s*(.+)$/im)
     ?? extractField(currentText, /^[-*]\s*操控模式\s*[:：]\s*(.+)$/im)
 

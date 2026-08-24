@@ -6,8 +6,7 @@
 
 - `timeline.md` — 时间顺序的重要事件；
 - `important-events.md` — 不适合丢失的关键节点；
-- `unresolved-hooks.md` — 尚未解决的线索、风险、机会；
-- `commitments.md` — 承诺、义务、长期后果。
+（仍 open 的悬念、承诺、线索归 `state/THREADS.md`；closed 后归档回本目录的台账。）
 
 原则：
 
