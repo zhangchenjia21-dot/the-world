@@ -11,7 +11,7 @@
 | [char-niqiu](char-niqiu.md) | 泥鳅 | active | 斥候队驻地 | 汉军 · 斥候队 | 内道同组 · 友善 | 三月初七 |
 | [char-laoyao](char-laoyao.md) | 老鹞 | active | 斥候队驻地 | 汉军 · 斥候队（外道带队） | 尚未深交 | 三月初七 |
 | [char-mengdai](char-mengdai.md) | 孟岱 | active | 斥候队驻地 | 汉军 · 斥候队（外道组） | 同袍 · 班底候选 | 三月初七 |
-| [char-cenke](char-cenke.md) | 岑恪 | active | 城门 | 汉军 · 城门军候 | 保人（连坐） | 三月初七 |
+| [char-cenke](char-cenke.md) | 岑恪 | active | 城门 | 汉军 · 城门军候 | 保人（连坐） | 三月初五 |
 | [char-daxiong](char-daxiong.md) | 大熊 | active | 城门 | 汉军 · 城门守卒 | 公开拥护者 | 三月初四 |
 | [char-bingcaoyuan](char-bingcaoyuan.md) | 兵曹掾（姓名未知） | active | 西营 | 汉军 · 巨鹿郡兵曹 | 验看主官 · 叙功未兑现 | 三月初四 |
 | [char-chengsanyan](char-chengsanyan.md) | 程三眼 | 传闻 | 绎幕城（将攻城） | 黄巾军（渠帅） | 敌对 | 三月初七 |
