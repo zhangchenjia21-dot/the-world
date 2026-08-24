@@ -14,4 +14,5 @@
 | [char-cenke](char-cenke.md) | 岑恪 | active | 城门 | 汉军 · 城门军候 | 保人（连坐） | 三月初五 |
 | [char-daxiong](char-daxiong.md) | 大熊 | active | 西水门 | 汉军 · 城门守卒 | 公开拥护者 · 酒约 | 三月初十 |
 | [char-bingcaoyuan](char-bingcaoyuan.md) | 兵曹掾（姓名未知） | active | 西营 | 汉军 · 巨鹿郡兵曹 | 叙功已入简 · 暗查直属上官 | 三月初十 |
+| [char-hankai](char-hankai.md) | 韩楷 | active | 兵曹后院签押房（暗查班子书佐） | 汉军 · 巨鹿郡兵曹（书佐） | 暗查班底成员 · 掾指派 | 三月初十 |
 | [char-chengsanyan](char-chengsanyan.md) | 程三眼 | 传闻 | 绎幕城（将攻城） | 黄巾军（渠帅） | 敌对 | 三月初七 |
