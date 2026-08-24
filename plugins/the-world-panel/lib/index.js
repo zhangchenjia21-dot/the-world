@@ -15,6 +15,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import z from '@deepseek-ai/schemastery'
+import { resolveSessionPreset } from '@deepseek-ai/dsh-agent-presets'
 import { resolveGame, readBounded } from '../../shared/游戏定位.js'
 
 export const name = 'the-world-panel'
@@ -52,9 +53,18 @@ function sessionCwdOf(ctx, sessionId, clientCwd) {
   return { cwd: null, session: null }
 }
 
-/** preset 门：能确定会话 preset 且不是 The World 时拒绝（视为非游戏）。 */
+/** preset 门：能确定会话 preset 且不是 The World 时拒绝（视为非游戏）。
+ *  注意必须用宿主官方的 resolveSessionPreset（事件流里最后一条 agent-preset/selected
+ *  优先于创建 header）——session.header.agentPreset 只是创建时刻的值，
+ *  用户在空会话上切换 preset 后 header 不会改写，只读 header 会把合法会话误判拒绝。 */
 function presetAllowed(session, presetId) {
-  const preset = session?.header?.agentPreset
+  if (!session) return true // 会话不在内存（未水合）：放行，cwd 语义门兜底
+  let preset
+  try {
+    preset = resolveSessionPreset(session)
+  } catch {
+    preset = session.header?.agentPreset
+  }
   if (preset === undefined || preset === null) return true // 无法判定时放行（客户端另有门槛）
   return preset === presetId
 }
