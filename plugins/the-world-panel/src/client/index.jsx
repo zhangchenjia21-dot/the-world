@@ -269,14 +269,17 @@ export function apply(ctx) {
   )
 
   // 游戏 session 进入视野时自动 openTab 顶入（DEC-B10）；非 the-world preset /
-  // 非游戏 cwd 一律不动（AC-6）。
+  // 非游戏 cwd 一律不动（AC-6）。每个会话每次页面加载只自动打开一次：
+  // subscribe 在列表任何变化时都会触发，重复 openTab 会经 dedupe 聚焦而抢走
+  // 用户正在使用的其它 tab 的焦点。
   let probing = false
+  const autoOpened = new Set()
   const tryAutoOpen = () => {
     if (probing) return
     try {
       const snapshot = ctx.sessions?.list?.getSnapshot?.()
       const sessionId = snapshot?.current
-      if (!sessionId) return
+      if (!sessionId || autoOpened.has(sessionId)) return
       const summary = snapshot.byId?.[sessionId]
       if (!summary?.cwd) return
       if (summary.agentPreset && summary.agentPreset !== PRESET_ID) return
@@ -285,9 +288,14 @@ export function apply(ctx) {
       fetch(stateUrl({ sessionId, cwd: summary.cwd }))
         .then((r) => r.json())
         .then((d) => {
+          if (!d?.game) return
+          autoOpened.add(sessionId)
           // 带 path 的 content open：宿主约定它必须「落入视野」——面板折叠时自动展开
           // （纯 type open 永不展开）。path 对本 tab 仅为元数据（指向会话工作区）。
-          if (d?.game) sidebar.openTab({ type: TAB_ID, path: summary.cwd, meta: { game: d.game.id } }, { sessionId, cwd: summary.cwd })
+          const scope = { sessionId, cwd: summary.cwd }
+          sidebar.openTab({ type: TAB_ID, path: summary.cwd, meta: { game: d.game.id } }, scope)
+          // 打开后显式激活：恢复的布局里默认聚焦可能是内置「文件」tab。
+          sidebar.activateTab?.(TAB_ID, scope)
         })
         .catch(() => {})
         .finally(() => {
