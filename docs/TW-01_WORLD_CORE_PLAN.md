@@ -1,12 +1,21 @@
 ---
 title: The World｜TW-01 Minimal World Core Plan
-status: current-stage-plan
-updated: 2026-08-23
+status: completed-stage-plan
+updated: 2026-08-24
 stage: TW-01
+result: Reality Gate A PASS
 reference_host: DeepSeek Harness
+current_truth: PRODUCT_SPEC_CURRENT.md
+final_report: experiments/GATE_A_FINAL_2026-08-24.md
 ---
 
-# TW-01｜Minimal World Core
+# TW-01｜Minimal World Core｜COMPLETED
+
+> **历史阶段计划。TW-01 / Reality Gate A 已于 2026-08-24 通过真实长局人工体验裁定。**
+>
+> 当前阶段与产品真相请读 `PRODUCT_SPEC_CURRENT.md`；Gate A 最终结论请读 `experiments/GATE_A_FINAL_2026-08-24.md`。本文件保留 TW-01 原始问题、职责边界和验收逻辑，不再作为当前开发路线。
+
+---
 
 ## 0. Goal
 
@@ -16,13 +25,15 @@ TW-01 的目标不是制作完整 RPG Runtime，而是把 Bare DSH Probe 已经�
 
 > **AI GM 仍然像 Bare DSH 一样自由、会写、会主动推进，但不会随着长局继续而忘记维护世界，也不会把 GM / System / Source 私有知识随意塞进 NPC 脑中。**
 
+最终结果：**PASS**。
+
 ---
 
-## 1. World Core v0.1 Required Behaviors
+## 1. Required Behaviors
 
 ### WC-01｜Game Mode Entry
 
-启动 / 继续 The World game 时，World Core 能够：
+启动 / 继续 The World game 时，World Core 负责：
 
 - 确认当前 game workspace；
 - 读取最小恢复入口；
@@ -32,7 +43,7 @@ TW-01 的目标不是制作完整 RPG Runtime，而是把 Bare DSH Probe 已经�
 
 ### WC-02｜Durable Maintenance Discipline
 
-每次 turn / 重大阶段结束时，Agent 必须执行一个很薄的判断：
+核心判断：
 
 > **本轮是否产生了未来仍需成立的变化？**
 
@@ -43,29 +54,29 @@ TW-01 的目标不是制作完整 RPG Runtime，而是把 Bare DSH Probe 已经�
 - 承诺 / 债务 / 仇恨；
 - 同伴 / 敌对 / 雇佣；
 - 持续伤情 / 能力；
-- 任务长期状态；
+- 任务 / thread 长期状态；
 - 地点 / 势力 / 世界局势变化；
 - 重大资源变化；
 - unresolved consequence / hook；
 - 大幅时间推进后的世界状态。
 
-有变化：写回正确 Owner。
+原始要求是“有变化写正确 Owner，无变化不机械写”。真实试玩后进一步演化为 Game Workspace Architecture v0.2 的两层维护：
 
-无变化：不机械写文件。
-
-关键验收：**长局中维护职责不能自然衰减为 0。**
+```text
+Tier 1｜每回合 DELTAS 捕获
+↓
+Tier 2｜检查点归并到正确 Owner
+```
 
 ### WC-03｜Dynamic Durable Identity
 
-运行中生成的实体不因“不是 Source 角色 / 不重要 / 尚未命名”而丢失。
-
 > **Importance controls attention, not existence.**
 
-第一阶段不做大型 Entity DB；只要求 game-local state 能稳定认出同一实体。
+运行中生成的实体不因“不是 Source 角色 / 不重要 / 尚未命名”而丢失。
+
+TW-01 不建设大型 Entity DB；game-local state 只需稳定认出同一实体。
 
 ### WC-04｜Knowledge / Exposure Boundary
-
-World Core 必须稳定提供：
 
 > **GM / Source / System knows X != NPC knows X.**
 
@@ -81,7 +92,7 @@ NPC 使用信息时，应符合其世界内知识来源。
 - 合理推断；
 - 明确授权的超自然 / 系统能力。
 
-禁止默认泄漏：
+默认不泄漏：
 
 - GM 后台计划；
 - 玩家系统私有信息；
@@ -90,7 +101,7 @@ NPC 使用信息时，应符合其世界内知识来源。
 - 角色卡隐藏信息；
 - 其它 NPC 私有事实。
 
-第一版优先用 context semantics / prompt boundary，而不是 ACL / Knowledge DB。
+TW-01 优先使用 context semantics / prompt boundary，不建设通用 ACL / Knowledge DB。
 
 ### WC-05｜Player Authorization Context
 
@@ -108,7 +119,7 @@ World Core 向 GM 提供当前主角操控粒度：
 
 ### WC-06｜Pacing Elasticity
 
-World Core 不限制世界主动推进，但应提醒 GM 同时维护：
+同时维护：
 
 ```text
 World Loop
@@ -124,48 +135,37 @@ Life Loop
 
 > **不是所有有价值的场景都必须推动主线。**
 
-不设置“每 N 个事件必须休息”之类机械节奏状态机。
+不设置固定节奏 FSM。
 
 ### WC-07｜Fresh-session Recovery
 
-从完全没有旧聊天上下文的新 DSH Session 启动时，World Core 应能：
+完全没有旧聊天上下文的新 DSH Session 应能：
 
 - 找到 game；
-- 读取本局 Composition 配置（见 WC-08），继续使用已确认组合而不是重新询问或重新决定；
+- 读取 Composition；
 - 读取 current state；
-- 读取必要 unresolved story / memory；
+- 读取未归并 durable facts / unresolved threads / recent memory；
 - 按需读取 Source；
 - 恢复当前地点、人物关系、承诺、局势和玩家控制模式；
 - 继续游戏而不是重新开局。
 
 ### WC-08｜New Game Setup / Game Composition
 
-新开一局时，World Core 必须提供 **Game Composition** 流程。正式语义：
+正式语义：
 
 > **Agent 不得静默决定本局启用哪些可选拓展包。**
 
-玩家在正式进入游戏叙事前，至少确认：
+玩家在正式进入游戏叙事前至少确认：
 
-1. **World**：本局使用哪个世界包；
-2. **Player Character**：使用哪张人物卡 / 原创主角；
-3. **Expansion / Mechanics**：本局启用哪些拓展包 / 机制模块；
-4. **Protagonist Control Mode**：Full / Light / Narrative Delegation（见 WC-05）。
+1. World；
+2. Expansion / Mechanics；
+3. 世界起点 / 口径；
+4. Player Character；
+5. Protagonist Control Mode；
+6. Save Policy；
+7. 最终配置确认。
 
-世界包 / 资产可以声明内容分级：
-
-- **Required**：世界定义的必要组成部分，随世界包生效，向玩家明示但不需要逐项选择；
-- **Recommended**：世界作者推荐项，作为玩家确认时的默认预选，玩家可取消；
-- **Optional**：默认不启用，**必须经玩家明确选择**；Agent 推荐可以，代替玩家勾选不行。
-
-边界：
-
-- Source NPC / lore / 其它世界内部资产不要求玩家逐项选择；Game Composition 是**包 / 模块级**确认，不是资产级清点；
-- 玩家确认后的最终组合固化为本 game 的正式配置（`games/<game-id>/COMPOSITION.md`），是 game-local canonical 事实，不是 UI preference；
-- 后续 Session 恢复（WC-07）继续使用该配置，不因换 Session 而丢失或重置；
-- 局内变更组合（启用 / 停用拓展）是一次玩家可感知的正式修改，写回 COMPOSITION，不允许 Agent 静默执行；
-- **Composition 未确认完成前，不进入正式游戏叙事。**
-
-形式化层级：
+确认结果固化为 `games/<game-id>/COMPOSITION.md`，跨 Session 恢复继续使用。
 
 ```text
 Asset Library（已安装 / 可用）
@@ -173,104 +173,86 @@ Asset Library（已安装 / 可用）
 != Current Runtime Relevant（当前相关）
 ```
 
-**Enabled != Installed**；启用集合来自玩家确认，不来自 Agent 默认。
-
-实现（v0.1）：DSH 插件 `the-world-core`——开局向导为提示语义（模型用 ask_user_question 逐项确认），
-程序化确认门只有一处：session-start 检测 `COMPOSITION.md` 的「确认状态」，
-未确认的游戏目录走“补完确认”注入而不是正常恢复（`readCompositionStatus`）。
+**Enabled != Installed**。
 
 ---
 
-## 2. Minimal Workspace Contract
+## 2. Workspace Evolution
 
-第一版保持 Markdown-first。
-
-建议继续使用项目已有抽象：
+TW-01 最初只要求 Markdown-first minimal workspace：
 
 ```text
 games/<game-id>/
-├─ README.md
+├─ COMPOSITION.md
+├─ state/CURRENT.md
+├─ story/LEDGER.md
+└─ memory/RECENT.md
+```
+
+真实试玩证明需要更清晰 Owner 后，演化为 `GAME_WORKSPACE_ARCHITECTURE_v0.2.md`：
+
+```text
+games/<game-id>/
+├─ COMPOSITION.md
 ├─ state/
+│  ├─ CURRENT.md
+│  ├─ PLAYER.md
+│  ├─ THREADS.md
+│  ├─ WORLD.md            # 按需
+│  ├─ characters/
+│  ├─ organizations/      # 按需
+│  └─ places/             # 按需
+├─ mechanics/
 ├─ story/
 ├─ memory/
+│  ├─ DELTAS.md
+│  └─ RECENT.md
 └─ saves/
 ```
 
-但 TW-01 不需要一开始就拆几十个文件。
-
-### Minimum viable files
-
-```text
-games/<game-id>/
-├─ README.md
-├─ COMPOSITION.md      ← WC-08：玩家确认的本局组合配置（canonical）
-├─ state/
-│  └─ CURRENT.md
-├─ story/
-│  └─ LEDGER.md
-└─ memory/
-   └─ RECENT.md
-```
-
-根据真实压力再拆：
-
-- characters；
-- factions；
-- locations；
-- inventory；
-- quests；
-- mechanics state。
-
-原则：
+原则保持不变：
 
 > **Owner 清晰优先于文件数量。**
 
+> **一个事实只有一个 Owner。**
+
+> **Core 文件固定存在；实体与机制状态按需生成。**
+
 ---
 
-## 3. Turn Responsibilities
-
-概念流程：
+## 3. Turn Responsibilities｜Final TW-01 Shape
 
 ```text
 [Session / Turn Start]
 World Core
 → 确认 game + composition + control mode
-→ 新 game：先完成 WC-08 Game Composition 确认，未确认不进入叙事
-→ 旧 game：按已确认 COMPOSITION 恢复，不重新决定启用组合
-→ 注入少量 GM / world / knowledge-boundary semantics
-→ 提供恢复入口
+→ 新 game：完成 Setup / Composition
+→ 旧 game：恢复 workspace
+→ 注入少量高价值语义
 
 [Agent / GM]
 → 按需 read Source / state / story / memory
-→ 自由主持、自由创造、自由 adjudicate
+→ 自由主持 / 创造 / adjudicate
 
 [Player-facing response]
-→ 正常游戏文本
+→ 正常游戏文本先对玩家可见
 
-[Post-turn maintenance — Tier 1（每回合）]
-→ 判断 durable changes
-→ 只向 memory/DELTAS.md 追加 1–3 行（自写入起即为有效事实）
-
-[Checkpoint consolidation — Tier 2（场景收束 / 时间大跳 / 每 N 玩家回合）]
-→ 把 DELTAS 逐条归并到受影响 Owner
-→ 移除已归并条目，刷新 recent memory / recovery metadata
-→ 到达存档回合时先归并再做存档快照
+[Post-turn maintenance]
+→ 普通回合：DELTAS 捕获
+→ 检查点：归并 Owner / 刷新 recovery
+→ 存档条件：归并后建立 snapshot
+→ maintenance 静默结束
 ```
 
-重点：
+关键决策：
 
-- 不做 narrative approval；
-- 不要求模型先提交 typed proposal；
-- 不要求每回合全仓读取；
-- 不要求每回合全文件 rewrite；
-- 每回合维护只做轻量捕获，批量归并推迟到检查点；
-- maintenance 是 Agent 的游戏后台职责，而不是玩家任务。
+> **Narrative first, maintenance in the background step while the player reads.**
 
 ---
 
 ## 4. Context Layers
 
-第一版至少概念上区分四类知识：
+至少概念上区分：
 
 ```text
 A. GM / Total Repository Knowledge
@@ -285,7 +267,7 @@ World Core 的职责是持续提醒边界，而不是建立通用权限数据库
 
 ---
 
-## 5. What TW-01 Does NOT Build
+## 5. What TW-01 Did NOT Build
 
 - 独立 Agent Runtime；
 - 通用 Provider layer；
@@ -297,89 +279,40 @@ World Core 的职责是持续提醒边界，而不是建立通用权限数据库
 - 完整 RPG UI；
 - Map；
 - Combat engine；
-- Economy engine；
-- 完整 player-facing Save UI。
+- Economy engine。
 
-这些只能由后续真实需求或 Gate B 产品价值推动。
-
----
-
-## 6. First Implementation Order
-
-### Step 1｜DSH Capability / Extension Seam Survey
-
-先核验 DeepSeek Harness current：
-
-- 插件 package 结构；
-- systemPrompt / context injection seam；
-- session start / turn / agent-loop hooks；
-- tool registration；
-- workspace / cwd handling；
-- session recovery / fork ability；
-- UI extension seam。
-
-目标不是设计产品，而是找到最薄、最 DSH-native 的挂接点。
-
-### Step 2｜World Core v0.1 Game-mode Context
-
-只实现：
-
-- 进入 / 继续游戏；
-- GM high-value semantics；
-- knowledge boundary；
-- protagonist control mode；
-- recovery entry instructions。
-
-先不实现复杂工具。
-
-### Step 3｜Durable Maintenance Hook
-
-在合适的 post-turn / agent step seam 中，稳定触发：
-
-> durable change review
-
-让 Agent 自主决定哪些文件需更新。
-
-第一版不要求 machine schema。
-
-### Step 4｜Migrate / Start a Real Test Game
-
-用三国资产启动一局新的 TW-01 test game，避免直接拿 Bare DSH 的偶然 `save/` 结构当正式架构。
-
-### Step 5｜Reality Gate A Stress Test
-
-重点重测 Bare DSH 已失败的项目：
-
-1. 连续多场景后是否仍写 durable state；
-2. 动态 NPC 是否稳定留下；
-3. NPC 是否还会泄漏系统 / 未来历史知识；
-4. 时间推进后 world state 是否同步；
-5. 是否保留自由探索 / downtime；
-6. World Core 是否损害文笔和主动性；
-7. 全新 DSH Session 是否恢复同一世界。
+这些能力只能由后续真实需求或 RPG 产品价值推动。
 
 ---
 
-## 7. Gate A Acceptance
+## 6. Reality Gate A｜PASS
 
-TW-01 通过 Gate A 至少需要：
+TW-01 的正式验收项：
 
-- **Want to Continue**：玩家仍想继续玩；
-- **GM Quality Preserved**：相对 Bare DSH 不明显变机械；
-- **Persistence Does Not Decay**：长局中 durable maintenance 不消失；
-- **Dynamic Identity Survives**：动态人物 / 关系 / 承诺可恢复；
-- **Epistemic Boundaries Hold**：NPC 不无来源继承 GM / System / future knowledge；
-- **Cross-session Same World**：全新 Session 可恢复；
-- **Player Plays, Agent Maintains**：玩家不用充当文件管理员。
+1. **Want to Continue**；
+2. **GM Quality Preserved**；
+3. **Persistence Does Not Decay**；
+4. **Dynamic Identity Survives**；
+5. **Epistemic Boundaries Hold**；
+6. **Cross-session Same World**；
+7. **Player Plays, Agent Maintains**。
+
+**Result：PASS（2026-08-24）。**
+
+详见 `experiments/GATE_A_FINAL_2026-08-24.md`。
 
 ---
 
-## 8. First Coding Task Recommendation
+## 7. Historical Route
 
-真正第一份代码不应该是 Save UI 或 Entity DB，而应该是：
+```text
+TW-00.5 Bare DSH Capability Probe   ✓ COMPLETE
+↓
+TW-01 Minimal World Core            ✓ COMPLETE
+↓
+Reality Gate A                      ✓ PASS
+↓
+Reality Gate B / RPG Experience     ← current，见 PRODUCT_SPEC_CURRENT.md
+```
 
-> **一个最小 DSH World Core plugin skeleton，能够在游戏 Session 中稳定注入 World Core context，并在合适生命周期点触发 durable maintenance responsibility。**
-
-在写这份代码之前，只需要完成一次 current DSH seam survey。
-
-这将是 TW-01 的第一个 vertical spike。
+TW-01 到此关闭。后续不要继续把新 RPG UI / Map / Mechanics 产品能力吸收到 World Core，只因为 Core 已经存在。
