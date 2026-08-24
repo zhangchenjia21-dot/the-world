@@ -13,6 +13,8 @@ import {
   bulletsOf,
   cleanDisplay,
   stripDevRefs,
+  mapCharRefs,
+  localizeStatus,
   truncate,
   parseThreads,
   threadGroup,
@@ -27,7 +29,8 @@ import {
   PEOPLE_BUCKETS,
   personBuckets,
   characterView,
-  identityLines,
+  heroIdentity,
+  heroFacts,
   buildOverview,
   worldName
 } from './viewmodel.js'
@@ -36,6 +39,15 @@ export const inject = ['betterSidebar', 'sessions']
 
 const TAB_ID = 'the-world:panel'
 const PRESET_ID = 'the-world'
+
+/** 当前局 char-* → 显示名映射（A1）。PanelBody 每次渲染时刷新；
+ *  渲染同步向下传播，模块级缓存对 React 与冒烟 stub 都成立。 */
+let charNameById = {}
+
+/** 玩家正文清洗管线：剥开发引用 → char-* 映射。 */
+function playerFacing(text) {
+  return mapCharRefs(stripDevRefs(text), charNameById)
+}
 
 function stateUrl(scope) {
   const params = new URLSearchParams()
@@ -59,9 +71,9 @@ function renderInline(text, keyPrefix) {
   })
 }
 
-/** 通用 Markdown 体渲染：引用注记 / 列表 / 标题 / 段落（先剥离链接与路径引用）。 */
+/** 通用 Markdown 体渲染：引用注记 / 列表 / 标题 / 段落（先剥开发引用并映射 char-*）。 */
 function Markdown({ text }) {
-  const cleaned = stripDevRefs(text)
+  const cleaned = playerFacing(text)
   if (!cleaned || !cleaned.trim()) return h('div', { className: 'twp-empty' }, '（空）')
   const lines = cleaned.split(/\r?\n/)
   const out = []
@@ -97,7 +109,7 @@ function Markdown({ text }) {
 
 /** 分节面板：小篆风标题 + 条目列表。 */
 function SectionCard({ title, text }) {
-  const bullets = bulletsOf(stripDevRefs(text))
+  const bullets = bulletsOf(playerFacing(text))
   return h(
     'section',
     { className: 'twp-card' },
@@ -158,9 +170,8 @@ function OverviewPanel({ data }) {
         'div',
         { className: 'twp-hero-m' },
         ov.name ? h('div', { className: 'twp-hero-name' }, ov.name) : null,
-        ov.identity.length
-          ? h('div', { className: 'twp-hero-id' }, ov.identity.map((line, i) => h('div', { key: i }, renderInline(line, `id${i}`))))
-          : null
+        ov.identity.length ? h('div', { className: 'twp-hero-id' }, ov.identity.join(' · ')) : null,
+        ov.facts ? h('div', { className: 'twp-hero-facts' }, ov.facts) : null
       )
     ),
     ov.time || ov.location
@@ -188,10 +199,13 @@ function OverviewPanel({ data }) {
 
 /** ── 角色 ───────────────────────────────────────────────────────────────── */
 
-/** 角色页：Character Sheet——核心状态优先，背景/认知退居折叠层。 */
+/** 角色页：Character Sheet——核心状态优先，背景/认知退居折叠层。
+ *  A2：装备/携带物不再在此完整渲染（行囊页是其玩家界面 Owner）。 */
 function PlayerSheet({ text }) {
   const view = characterView(text)
-  const identity = identityLines(sectionsOf(splitDoc(text ?? '').body).sections)
+  const sections = sectionsOf(splitDoc(text ?? '').body).sections
+  const identity = heroIdentity(sections)
+  const facts = heroFacts(sections)
   return h(
     'div',
     null,
@@ -203,13 +217,11 @@ function PlayerSheet({ text }) {
         'div',
         { className: 'twp-hero-m' },
         h('div', { className: 'twp-hero-name' }, view.name),
-        identity.length
-          ? h('div', { className: 'twp-hero-id' }, identity.map((line, i) => h('div', { key: i }, renderInline(line, `id${i}`))))
-          : null
+        identity.length ? h('div', { className: 'twp-hero-id' }, identity.join(' · ')) : null,
+        facts ? h('div', { className: 'twp-hero-facts' }, facts) : null
       )
     ),
     view.primary.map((s) => h(SectionCard, { key: s.title, title: s.title, text: s.text })),
-    view.gear.map((s) => h(SectionCard, { key: s.title, title: s.title, text: s.text })),
     view.collapsed.map((s) => h(FoldCard, { key: s.title, title: s.title, text: s.text }))
   )
 }
@@ -274,8 +286,8 @@ function PeoplePanel({ indexText, characters, nearby }) {
             h('span', { className: 'twp-npc-name' }, p.name),
             p.affiliation ? h('span', { className: 'twp-person-sub' }, p.affiliation) : null
           ),
-          p.relation ? h('span', { className: 'twp-badge plain' }, p.relation) : null,
-          p.status ? h('span', { className: `twp-badge ${/敌对|仇/.test(p.status + p.relation) ? 'urgent' : ''}` }, p.status) : null,
+          p.relation ? h('span', { className: 'twp-badge plain' }, localizeStatus(p.relation)) : null,
+          p.status ? h('span', { className: `twp-badge ${/敌对|仇/.test(p.status + p.relation) ? 'urgent' : ''}` }, localizeStatus(p.status)) : null,
           p.location ? h('span', { className: 'twp-person-loc' }, p.location) : null
         ),
         p.lastSeen ? h('div', { className: 'twp-person-seen' }, `最后确认：${p.lastSeen}`) : null,
@@ -315,7 +327,7 @@ function MechanicCard({ mech, defaultOpen }) {
       null,
       h('span', { className: 'twp-card-seal' }, '⚙'),
       h('span', { className: 'twp-npc-name' }, name),
-      status ? h('span', { className: 'twp-badge' }, status) : null
+      status ? h('span', { className: 'twp-badge' }, localizeStatus(status)) : null
     ),
     mech.sections.map((s) => h(SectionCard, { key: s.title, title: s.title, text: s.text }))
   )
@@ -340,13 +352,13 @@ function ThreadCard({ thread, onArchive }) {
       { className: 'twp-quest-h' },
       thread.id ? h('span', { className: 'twp-quest-id' }, thread.id) : null,
       h('span', { className: 'twp-quest-title' }, thread.title),
-      status ? h('span', { className: `twp-badge ${threadTone(group)}` }, status) : null
+      status ? h('span', { className: `twp-badge ${threadTone(group)}` }, localizeStatus(status)) : null
     ),
     rest.length
       ? h(
           'dl',
           { className: 'twp-quest-f' },
-          rest.flatMap(([k, v]) => [h('dt', { key: `k${k}` }, k), h('dd', { key: `v${k}` }, renderInline(stripDevRefs(v), `q${k}`))])
+          rest.flatMap(([k, v]) => [h('dt', { key: `k${k}` }, k), h('dd', { key: `v${k}` }, renderInline(localizeStatus(playerFacing(v)), `q${k}`))])
         )
       : h(Markdown, { text: thread.raw }),
     // DEC-B3 v1.2 窄写口：归档不是删除，线程块移入 story/LEDGER.md 可追溯
@@ -426,6 +438,218 @@ function AffairsPanel({ threadsText, mechanicQuests, mechanics, onArchive }) {
   )
 }
 
+/** ── 存档（Save / Restore v0.1）───────────────────────────────────────────── */
+
+function savesUrl(scope) {
+  return stateUrl(scope).replace('/state?', '/saves?')
+}
+
+/** 服务端稳定错误码 → 玩家可读文案（错误必须显形，不吞异常）。 */
+const SAVE_ERROR_TEXT = {
+  'agent-running': '正在生成中——等这一回合结束后再保存或恢复',
+  busy: '有存档操作正在进行，请稍后再试',
+  'invalid-save-id': '存档标识非法',
+  'save-not-found': '存档不存在（可能已被移除）',
+  'save-incompatible': '该存档是旧版归档，当前版本不可直接恢复',
+  'restore-failed': '恢复失败，已回滚到恢复前状态',
+  'save-failed': '保存失败'
+}
+
+function saveErrorText(payload, fallback) {
+  return SAVE_ERROR_TEXT[payload?.error] ?? payload?.message ?? fallback
+}
+
+/**
+ * B16 成功路径：restore 完成后在同一个 DSH Workspace 下显式 create 全新 Session 并 open。
+ * 绝不复用 restore 前出生的 blank session；seam 不可用时返回 requiresNewSession（B18）。
+ */
+async function enterFreshSessionAfterRestore(ctx, scope) {
+  const sessions = ctx?.sessions
+  if (typeof sessions?.create !== 'function' || typeof sessions?.open !== 'function') {
+    return { requiresNewSession: true }
+  }
+  let workspaceId = null
+  try {
+    // 真实 DSH client：workspace 条目的标识字段是 workspaceId（不是 id），路径字段是 path
+    const items = ctx.get?.('workspaces')?.list?.getSnapshot?.()?.items ?? []
+    const hit =
+      items.find((w) => w.sessionIds?.includes(scope?.sessionId)) ??
+      items.find((w) => (w.path ?? w.cwd) === scope?.cwd)
+    workspaceId = hit?.workspaceId ?? hit?.id ?? null
+  } catch {
+    workspaceId = null
+  }
+  if (!workspaceId) return { requiresNewSession: true }
+  const newSessionId = await sessions.create({ workspaceId })
+  await sessions.open(newSessionId)
+  return { sessionId: newSessionId }
+}
+
+/**
+ * 存档页（B1）：页首当前进度 + 手动保存；存档卡列表（类型/时点/兼容性）；
+ * 恢复必须两步确认（B8），成功后强制进入恢复后出生的全新 Session（B15/B16）。
+ */
+function SavesPanel({ scope, ctx, gameTime }) {
+  const [saves, setSaves] = useState(null)
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [label, setLabel] = useState('')
+  const [confirmId, setConfirmId] = useState(null)
+  const [restored, setRestored] = useState(null)
+
+  const running = Boolean(ctx?.sessions?.list?.getSnapshot?.()?.byId?.[scope?.sessionId]?.running)
+
+  const load = () => {
+    fetch(savesUrl(scope))
+      .then((r) => r.json())
+      .then((d) => {
+        setSaves(d?.saves ?? [])
+        setError(null)
+      })
+      .catch((e) => setError(`存档列表加载失败：${e?.message ?? e}`))
+  }
+  useEffect(load, [scope?.sessionId, scope?.cwd])
+
+  const saveNow = () => {
+    setBusy(true)
+    setError(null)
+    fetch(savesUrl(scope).replace('/saves?', '/save?'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ label: label.trim() || undefined })
+    })
+      .then((r) => r.json())
+      .then((r) => {
+        setBusy(false)
+        if (!r?.ok) {
+          setError(saveErrorText(r, '保存失败'))
+          return
+        }
+        setLabel('')
+        load() // watch 不含 saves/，手动刷新列表
+      })
+      .catch((e) => {
+        setBusy(false)
+        setError(`保存请求未送达：${e?.message ?? e}`)
+      })
+  }
+
+  const restoreNow = (saveId) => {
+    setBusy(true)
+    setError(null)
+    setConfirmId(null)
+    fetch(savesUrl(scope).replace('/saves?', '/restore?'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ saveId })
+    })
+      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r?.ok) {
+          setBusy(false)
+          setError(saveErrorText(r, '恢复失败'))
+          return
+        }
+        // restore 已成功：旧 Session 含有「未来历史」，必须换到恢复后出生的新 Session
+        try {
+          const result = await enterFreshSessionAfterRestore(ctx, scope)
+          setBusy(false)
+          setRestored(result.requiresNewSession ? { requiresNewSession: true } : { switched: true })
+        } catch {
+          setBusy(false)
+          setRestored({ requiresNewSession: true })
+        }
+      })
+      .catch((e) => {
+        setBusy(false)
+        setError(`恢复请求未送达：${e?.message ?? e}`)
+      })
+  }
+
+  // 恢复完成态：最显眼。自动切换失败时绝不显示成「可继续聊天」（B18）。
+  if (restored) {
+    return h(
+      'div',
+      { className: 'twp-restored' },
+      h('div', { className: 'twp-restored-title' }, '恢复完成'),
+      restored.requiresNewSession
+        ? h(
+            'div',
+            { className: 'twp-restored-warn' },
+            '当前聊天包含恢复点之后的未来历史，不能继续——请在左侧工作区新建会话再继续游戏。'
+          )
+        : h('div', null, '已切换到恢复后出生的全新会话，可以继续游戏。')
+    )
+  }
+
+  const confirmTarget = confirmId ? (saves ?? []).find((s) => s.id === confirmId) : null
+  return h(
+    'div',
+    null,
+    h(
+      'section',
+      { className: 'twp-card twp-save-now' },
+      h('header', { className: 'twp-card-h' }, h('span', { className: 'twp-card-seal' }, '❖'), '当前进度'),
+      gameTime ? h('div', { className: 'twp-save-time' }, gameTime) : null,
+      h('input', {
+        className: 'twp-save-label',
+        placeholder: '存档名（可留空）',
+        value: label,
+        onInput: (e) => setLabel(e?.target?.value ?? ''),
+        disabled: busy || running
+      }),
+      h(
+        'button',
+        { className: 'twp-save-btn', onClick: saveNow, disabled: busy || running },
+        running ? '生成中…' : busy ? '保存中…' : '保存当前进度'
+      )
+    ),
+    error ? h('div', { className: 'twp-error' }, error) : null,
+    saves === null
+      ? h('div', { className: 'twp-empty' }, '（读取存档中…）')
+      : saves.length === 0
+        ? h('div', { className: 'twp-empty' }, '（还没有存档）')
+        : [...saves].reverse().map((save) =>
+            h(
+              'section',
+              { key: save.id, className: `twp-card twp-save${save.restorable ? '' : ' legacy'}` },
+              h(
+                'header',
+                { className: 'twp-card-h' },
+                h('span', { className: 'twp-card-seal' }, '❖'),
+                h('span', { className: 'twp-save-name' }, save.label),
+                h('span', { className: 'twp-badge plain' }, save.kindLabel)
+              ),
+              save.gameTime ? h('div', { className: 'twp-save-time' }, save.gameTime) : null,
+              !save.restorable ? h('div', { className: 'twp-save-legacy-note' }, save.reasonIfNotRestorable ?? '当前版本不可直接恢复') : null,
+              confirmTarget?.id === save.id
+                ? h(
+                    'div',
+                    { className: 'twp-restore-confirm' },
+                    h(
+                      'div',
+                      { className: 'twp-restore-warn' },
+                      '恢复会把当前世界状态替换为该存档；当前聊天历史不会被改写，因此恢复后必须进入全新 Session 才能继续。'
+                    ),
+                    h(
+                      'button',
+                      { className: 'twp-restore-do', onClick: () => restoreNow(save.id), disabled: busy },
+                      busy ? '恢复中…' : '确认恢复'
+                    ),
+                    h('button', { className: 'twp-restore-cancel', onClick: () => setConfirmId(null), disabled: busy }, '取消')
+                  )
+                : save.restorable
+                  ? h(
+                      'button',
+                      { className: 'twp-restore', onClick: () => setConfirmId(save.id), disabled: busy || running },
+                      '恢复到这里'
+                    )
+                  : null
+            )
+          )
+  )
+}
+
 /** ── 分页骨架 ─────────────────────────────────────────────────────────────── */
 
 function formatTime(ms) {
@@ -435,7 +659,7 @@ function formatTime(ms) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function PanelBody({ data, onArchive }) {
+function PanelBody({ data, onArchive, scope, ctx }) {
   const [sub, setSub] = useState('overview')
   if (!data?.game) {
     return h('div', { className: 'twp-idle' }, '当前会话不是已确认的 The World 游戏局（或工作目录不在游戏工作区）。')
@@ -444,6 +668,8 @@ function PanelBody({ data, onArchive }) {
   const { inventory, quests, systems } = splitMechanics(data.mechanics ?? [])
   const hasMechanics = (data.mechanics ?? []).length > 0
   const overview = buildOverview(data)
+  // A1：刷新 char-* → 显示名映射（playerFacing 清洗管线消费）
+  charNameById = Object.fromEntries(parsePeopleIndex(data.charactersIndex?.text).map((p) => [p.id, p.name]))
 
   const tabs = [
     { id: 'overview', label: '概览' },
@@ -451,7 +677,8 @@ function PanelBody({ data, onArchive }) {
     { id: 'characters', label: '人物' },
     { id: 'inventory', label: '行囊' },
     { id: 'threads', label: '事务' },
-    ...(hasMechanics ? [{ id: 'mechanics', label: '系统' }] : [])
+    ...(hasMechanics ? [{ id: 'mechanics', label: '系统' }] : []),
+    { id: 'saves', label: '存档' } // B1：对 confirmed game 始终可见
   ]
   const active = tabs.some((t) => t.id === sub) ? sub : 'overview'
 
@@ -468,6 +695,8 @@ function PanelBody({ data, onArchive }) {
     content = h(InventoryPanel, { playerText: data.player?.text, mechanicInventory: inventory })
   } else if (active === 'threads') {
     content = h(AffairsPanel, { threadsText: data.threads?.text, mechanicQuests: quests, mechanics: data.mechanics, onArchive })
+  } else if (active === 'saves') {
+    content = h(SavesPanel, { scope, ctx, gameTime: overview.time })
   } else {
     content = h(
       'div',
@@ -491,6 +720,7 @@ function PanelBody({ data, onArchive }) {
 
 function WorldPanel(props) {
   const scope = props.scope
+  const ctx = props.ctx
   const visible = props.visible !== false
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
@@ -561,7 +791,7 @@ function WorldPanel(props) {
     ),
     error ? h('div', { className: 'twp-error' }, `面板数据加载失败：${error}`) : null,
     archiveError ? h('div', { className: 'twp-error' }, archiveError) : null,
-    h(PanelBody, { data, onArchive: archiveThread })
+    h(PanelBody, { data, onArchive: archiveThread, scope, ctx })
   )
 }
 
@@ -599,6 +829,7 @@ const CSS = `
 .twp-hero-name { font-size: 17px; font-weight: 700; font-family: "STKaiti", "KaiTi", serif; letter-spacing: 2px; }
 .twp-hero-m { min-width: 0; flex: 1; }
 .twp-hero-id { margin-top: 4px; font-size: 12px; color: #6b5a2a; line-height: 1.6; }
+.twp-hero-facts { font-size: 11.5px; color: #6b5a2a; opacity: 0.75; margin-top: 2px; }
 
 .twp-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
 .twp-chip { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #b8860b18;
@@ -700,6 +931,35 @@ const CSS = `
 
 .twp-empty, .twp-idle { opacity: 0.55; padding: 14px 6px; line-height: 1.7; }
 .twp-error { color: #9e2b25; padding: 6px 12px; font-size: 12px; }
+
+/* 存档页：沿用宣纸/墨色/朱砂，按钮要醒目（归档入口教训：太不起眼等于没有） */
+.twp-save-now .twp-save-time { font-family: "STKaiti", "KaiTi", serif; font-size: 14px; color: #6b5a2a; margin: 2px 0 8px; }
+.twp-save-label { width: 100%; box-sizing: border-box; padding: 5px 8px; margin-bottom: 8px; font-size: 12px;
+  border: 1px solid #b8860b55; border-radius: 4px; background: #fffdf6; color: inherit; }
+.twp-save-btn { width: 100%; padding: 7px 0; border: 1px solid #9e2b25; border-radius: 4px; cursor: pointer;
+  background: #9e2b25; color: #f6f1e5; font-size: 13px; font-family: "STKaiti", "KaiTi", serif; letter-spacing: 2px; }
+.twp-save-btn:disabled { opacity: 0.5; cursor: default; }
+.twp-save-btn:not(:disabled):hover { background: #b3352d; }
+.twp-save-name { font-weight: 700; }
+.twp-save-time { font-size: 12px; opacity: 0.7; margin: 2px 0 6px; }
+.twp-save.legacy { opacity: 0.75; }
+.twp-save-legacy-note { font-size: 11.5px; color: #6b5a2a; background: #b8860b14; border-radius: 4px; padding: 5px 8px; margin: 4px 0; }
+.twp-restore { margin-top: 6px; padding: 4px 14px; border: 1px solid #6b5a2a; border-radius: 4px; cursor: pointer;
+  background: none; color: #2b2620; font-size: 12.5px; }
+.twp-restore:not(:disabled):hover { border-color: #9e2b25; color: #9e2b25; background: #9e2b2512; }
+.twp-restore:disabled { opacity: 0.5; cursor: default; }
+.twp-restore-confirm { margin-top: 8px; border-top: 1px dashed #b8860b55; padding-top: 8px; }
+.twp-restore-warn { font-size: 12px; color: #9e2b25; line-height: 1.6; margin-bottom: 8px; }
+.twp-restore-do { padding: 5px 16px; border: none; border-radius: 4px; cursor: pointer;
+  background: #9e2b25; color: #f6f1e5; font-size: 12.5px; margin-right: 8px; }
+.twp-restore-do:disabled { opacity: 0.5; cursor: default; }
+.twp-restore-cancel { padding: 5px 14px; border: 1px solid #6b5a2a66; border-radius: 4px; cursor: pointer;
+  background: none; color: inherit; font-size: 12.5px; }
+.twp-restored { margin: 18px 4px; padding: 16px; border: 2px solid #9e2b25; border-radius: 6px;
+  background: #fdf6ee; text-align: center; }
+.twp-restored-title { font-family: "STKaiti", "KaiTi", serif; font-size: 18px; font-weight: 700;
+  color: #9e2b25; letter-spacing: 4px; margin-bottom: 8px; }
+.twp-restored-warn { font-size: 13px; color: #9e2b25; font-weight: 600; line-height: 1.7; }
 `
 
 function injectCss() {
@@ -733,7 +993,7 @@ export function apply(ctx) {
         icon: (size) => h('span', { style: { fontSize: size }, role: 'img', 'aria-label': '世界' }, '🗺️'),
         order: 5,
         single: true,
-        component: (props) => h(WorldPanel, { ...props, scope: enrichScope(props.scope) })
+        component: (props) => h(WorldPanel, { ...props, ctx, scope: enrichScope(props.scope) })
       }),
     'the-world-panel: tab'
   )

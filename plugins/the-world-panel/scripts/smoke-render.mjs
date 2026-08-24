@@ -98,16 +98,36 @@ const getJson = (url) =>
 
 const GAME1 = 'D:/AI/Projects/the world/games/luan-shi-sanguo'
 const stateJson = await getJson('http://127.0.0.1:3080/the-world/panel/state?cwd=' + encodeURIComponent(GAME1))
-globalThis.fetch = async () => ({ json: async () => stateJson })
+const savesUrlLive = 'http://127.0.0.1:3080/the-world/panel/saves?cwd=' + encodeURIComponent(GAME1)
+// POST 应答可编程：默认成功；错误显形用例临时换成失败应答
+let postResponder = () => ({ ok: true, save: { id: 'SAVE-99' }, restored: 'SAVE-02', requiresNewSession: true })
+const order = [] // restore/create/open 时序记录（§12.3：create 必须在 restore 成功之后）
+let runningFlag = false // 模拟当前 Agent 生成中（B9 UX guard）
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  if (u.includes('/saves?')) return { json: () => getJson(savesUrlLive) }
+  if (u.includes('/save?') || u.includes('/restore?')) {
+    if (u.includes('/restore?')) order.push('restore')
+    return { json: async () => postResponder(u, opts) }
+  }
+  return { json: async () => stateJson }
+}
 let esCreated = 0
 globalThis.EventSource = class { constructor() { esCreated++ } close() {} }
 
 const sidebar = { registerTab: () => () => {}, isTabEnabled: () => true, openTab() {}, activateTab() {} }
-const sessions = { list: { getSnapshot: () => ({ current: 's1', byId: { s1: { cwd: GAME1, agentPreset: 'the-world' } } }), subscribe: () => () => {} } }
+const sessions = {
+  list: { getSnapshot: () => ({ current: 's1', byId: { s1: { cwd: GAME1, agentPreset: 'the-world', running: runningFlag } } }), subscribe: () => () => {} },
+  // B16：restore 后的全新 Session 只能走 create({workspaceId}) + open；不实现 connectWorkspace——
+  // 面板若走 blank-reuse 路径会直接抛错落入 requiresNewSession，检查随之变红。
+  create: async ({ workspaceId } = {}) => { order.push(`create:${workspaceId}`); return 's-new' },
+  open: async (id) => { order.push(`open:${id}`) }
+}
+const workspaces = { list: { getSnapshot: () => ({ items: [{ workspaceId: 'w1', sessionIds: ['s1'], path: GAME1 }] }) } }
 
 let tabComponent = null
 sidebar.registerTab = (d) => { tabComponent = d.component; return () => {} }
-ex.apply({ betterSidebar: sidebar, sessions, effect: (fn) => fn() })
+ex.apply({ betterSidebar: sidebar, sessions, get: (n) => (n === 'workspaces' ? workspaces : undefined), effect: (fn) => fn() })
 
 let fail = 0
 const checks = []
@@ -130,9 +150,9 @@ let joined = texts.join('\n')
 const SUB = 6
 const switchPage = (id) => { hooks[SUB].v = id; hooks.length = SUB + 1 }
 
-// 默认页 = 概览；导航 = 概览/角色/人物/行囊/事务/系统
+// 默认页 = 概览；导航 = 概览/角色/人物/行囊/事务/系统/存档（B1：存档页常驻）
 const labels = tabLabels(el)
-check('导航-六分页（概览/角色/人物/行囊/事务/系统）', labels.join('/') === '概览/角色/人物/行囊/事务/系统')
+check('导航-七分页（概览/角色/人物/行囊/事务/系统/存档）', labels.join('/') === '概览/角色/人物/行囊/事务/系统/存档')
 check('概览-我是谁（张宸嘉）', joined.includes('张宸嘉'))
 check('概览-当前身份（暂署屯长）', joined.includes('暂署屯长'))
 check('概览-时间（中平元年）', joined.includes('中平元年'))
@@ -143,8 +163,8 @@ check('概览-近期变化（面见太守）', joined.includes('近期变化') &
 check('概览-关键资源（87 币）', joined.includes('87'))
 check('概览-标题用世界名（乱世三国）', joined.includes('乱世三国'))
 
-// AC-1：开发者元数据不进玩家界面
-for (const banned of ['player-zhangchenjia', 'char-cenke', 'mechanics/', '本文件 Own', 'source:', '（→ ']) {
+// AC-1：开发者元数据不进玩家界面（Part A 补强：文件引用与 char-* id）
+for (const banned of ['player-zhangchenjia', 'char-cenke', 'char-tianshi', 'mechanics/', '本文件 Own', 'source:', '（→ ', 'PLAYER.md', 'THREADS.md', 'LEDGER']) {
   check(`AC1-无「${banned}」`, !joined.includes(banned))
 }
 
@@ -156,6 +176,8 @@ check('角色-核心身份分节', joined.includes('社会身份'))
 check('角色-身体状态', joined.includes('身体'))
 check('角色-低频折叠（知识边界）', joined.includes('知识边界'))
 check('角色-无 raw id', !joined.includes('player-zhangchenjia'))
+// A2：装备节已移交行囊页，角色页不再完整重复
+check('角色-无装备节（已移交行囊）', !joined.includes('作训服'))
 
 // 人物页
 switchPage('characters')
@@ -217,6 +239,119 @@ globalThis.fetch = origFetch
 
 check('游戏态后挂 SSE', esCreated >= 1)
 
+// ── 存档页（§12.4 + §12.3 session 边界）──
+switchPage('saves')
+fullRender(el)
+await new Promise((r) => setTimeout(r, 60)) // 等 /saves fetch
+if (dirty) { dirty = false; texts = fullRender(el) }
+joined = texts.join('\n')
+check('存档-页首当前进度与保存按钮', joined.includes('当前进度') && joined.includes('保存当前进度'))
+check('存档-真实存档列表（兼容档）', joined.includes('手动') || joined.includes('自动回合') || joined.includes('里程碑'))
+
+hookIdx = 0
+dom = expand(el)
+const legacyCards = findByClass(dom, 'twp-save').filter((c) => String(c.props.className).includes('legacy'))
+const okCards = findByClass(dom, 'twp-save').filter((c) => !String(c.props.className).includes('legacy'))
+check('存档-存在 legacy 旧档卡', legacyCards.length >= 1)
+check('存档-legacy 档显示不可恢复', legacyCards.every((c) => {
+  const t = []
+  renderNode(c.children, t)
+  return t.join('').includes('不可直接恢复')
+}))
+check('存档-legacy 档无恢复按钮', legacyCards.every((c) => findByClass(c, 'twp-restore').length === 0))
+const restoreBtn = okCards.map((c) => findByClass(c, 'twp-restore')[0]).find(Boolean)
+check('存档-兼容档显示「恢复到这里」', typeof restoreBtn?.props?.onClick === 'function')
+
+// 手动存档：点击保存 → POST /save → 列表刷新（§12.4）
+const saveBtn = findByClass(dom, 'twp-save-btn')[0]
+check('存档-保存按钮可点击', typeof saveBtn?.props?.onClick === 'function')
+let savesGetCount = 0
+const fetchBefore = globalThis.fetch
+globalThis.fetch = async (url, opts) => {
+  if (String(url).includes('/saves?')) savesGetCount++
+  return fetchBefore(url, opts)
+}
+saveBtn.props.onClick()
+await new Promise((r) => setTimeout(r, 30))
+globalThis.fetch = fetchBefore
+check('存档-手动保存后刷新列表', savesGetCount >= 1)
+
+// 恢复两步确认（B8）：第一下出警告文案，第二下才发请求
+restoreBtn.props.onClick()
+hookIdx = 0
+dom = expand(el)
+let confirmBox = findByClass(dom, 'twp-restore-confirm')[0]
+const warnTexts = []
+if (confirmBox) renderNode(confirmBox.children, warnTexts)
+check('存档-恢复两步确认（警告文案）', warnTexts.join('').includes('恢复会把当前世界状态替换为该存档'))
+check('存档-确认前不发请求', !order.includes('restore'))
+const confirmBtn = findByClass(dom, 'twp-restore-do')[0]
+confirmBtn.props.onClick()
+await new Promise((r) => setTimeout(r, 40))
+if (dirty) { dirty = false; texts = fullRender(el) }
+
+// §12.3：restore 成功 → create 全新 session → open；顺序严格；不用 blank-reuse
+check('边界-restore 请求已发出', order.includes('restore'))
+const restoreAt = order.indexOf('restore')
+const createAt = order.findIndex((e) => e.startsWith('create:'))
+check('边界-create 在 restore 成功之后', createAt > restoreAt)
+check('边界-create 携带当前 workspaceId', order.includes('create:w1'))
+check('边界-open 的是全新 session（非 s1）', order.includes('open:s-new'))
+check('边界-恢复后进入已切换完成态', texts.join('\n').includes('已切换到恢复后出生的全新会话'))
+
+// 错误显形：服务端拒绝时 UI 呈现可读错误（§12.4）
+switchPage('overview')
+switchPage('saves')
+fullRender(el)
+await new Promise((r) => setTimeout(r, 60))
+if (dirty) { dirty = false; fullRender(el) }
+postResponder = () => ({ ok: false, error: 'save-incompatible' })
+hookIdx = 0
+dom = expand(el)
+const restoreBtn2 = findByClass(dom, 'twp-restore')[0]
+restoreBtn2.props.onClick()
+hookIdx = 0
+dom = expand(el)
+findByClass(dom, 'twp-restore-do')[0].props.onClick()
+await new Promise((r) => setTimeout(r, 40))
+if (dirty) { dirty = false; texts = fullRender(el) }
+check('存档-恢复失败错误显形', texts.join('\n').includes('旧版归档'))
+postResponder = () => ({ ok: true, restored: 'SAVE-02', requiresNewSession: true })
+
+// B18 fallback：create/open seam 不可用时 → requiresNewSession 显眼态，绝不假装可继续
+sessions.create = undefined
+sessions.open = undefined
+switchPage('overview')
+switchPage('saves')
+fullRender(el)
+await new Promise((r) => setTimeout(r, 60))
+if (dirty) { dirty = false; fullRender(el) }
+hookIdx = 0
+dom = expand(el)
+const restoreBtn3 = findByClass(dom, 'twp-restore')[0]
+restoreBtn3.props.onClick()
+hookIdx = 0
+dom = expand(el)
+findByClass(dom, 'twp-restore-do')[0].props.onClick()
+await new Promise((r) => setTimeout(r, 40))
+if (dirty) { dirty = false; texts = fullRender(el) }
+check('边界-seam 缺失时 requiresNewSession 显眼态', texts.join('\n').includes('不能继续') && texts.join('\n').includes('新建会话'))
+
+// B9 UX guard：Agent 生成中按钮禁用
+runningFlag = true
+switchPage('overview')
+switchPage('saves')
+fullRender(el)
+await new Promise((r) => setTimeout(r, 60))
+if (dirty) { dirty = false; fullRender(el) }
+hookIdx = 0
+dom = expand(el)
+check('边界-running 时保存按钮禁用', findByClass(dom, 'twp-save-btn')[0]?.props?.disabled === true)
+check('边界-running 时恢复按钮禁用', findByClass(dom, 'twp-restore').every((b) => b.props?.disabled === true))
+runningFlag = false
+sessions.create = async ({ workspaceId } = {}) => { order.push(`create:${workspaceId}`); return 's-new' }
+sessions.open = async (id) => { order.push(`open:${id}`) }
+
 // ── 第二 fixture（AC-9）：无机制、无 THREADS、不同世界与人物名 ──
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'twp-fixture2-'))
 try {
@@ -241,7 +376,7 @@ try {
   if (dirty) { dirty = false }
 
   const labels2 = tabLabels(el2)
-  check('fixture2-系统页隐藏（无机制）', labels2.join('/') === '概览/角色/人物/行囊/事务')
+  check('fixture2-系统页隐藏（无机制），存档页常驻', labels2.join('/') === '概览/角色/人物/行囊/事务/存档')
   texts = fullRender(el2)
   joined = texts.join('\n')
   check('fixture2-概览渲染（林远/星历）', joined.includes('林远') && joined.includes('星历 342'))

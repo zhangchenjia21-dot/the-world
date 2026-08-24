@@ -5,10 +5,10 @@
  * （state/PLAYER.md、state/characters/、mechanics/<id>/STATE.md、state/THREADS.md）
  * 投影为 JSON，并用 fs.watch + SSE 提供「回合结束后刷新」信号。
  *
- * 硬边界（DEC-B3 v1.2）：本模块对游戏文件以投影（只读）为主，唯一例外是
- * /close-thread 窄写口——把指定线程块从 state/THREADS.md 移入 story/LEDGER.md
- * （归档而非删除），不经模型。除此之外不存在任何写路径；
- * 只投影活档案（state/ 与 mechanics/ 的当前文件），不读 saves/ 历史快照。
+ * 硬边界（DEC-B3 v1.2 扩展）：本模块对游戏文件以投影（只读）为主，写口只有两个——
+ * /close-thread 窄写口（线程归档）与 /save、/restore 确定性快照（plugins/shared/存档.js），
+ * 都不经模型。除此之外不存在任何写路径；
+ * 投影只读活档案（state/ 与 mechanics/ 的当前文件）；saves/ 仅经 /saves 枚举元数据。
  *
  * 挂载方式：the-world preset 行（agent.cordis.yml）。不硬 inject webServer——
  * preset 也会在无 Web 宿主的平面被挂载校验（check-preset 夹具 / CLI），
@@ -19,6 +19,7 @@ import path from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { resolveSessionPreset } from '@deepseek-ai/dsh-agent-presets'
 import { resolveGame, readBounded } from '../../shared/游戏定位.js'
+import { createSnapshot, listSaves, resolveSaveDir, restoreSnapshot, withGameLock } from '../../shared/存档.js'
 import { cutThreadBlock, appendToLedger, archiveEntry, LEDGER_SEED, THREAD_ID_PATTERN } from './线程归档.js'
 
 export const name = 'the-world-panel'
@@ -217,6 +218,75 @@ function projectGame(game, maxChars) {
   }
 }
 
+/** B9 权威检查：当前会话 Agent 正在生成 / 执行工具时为 running。
+ *  agents 服务不可用或会话不在内存时视为无法判定——放行给文件层互斥锁兜底。 */
+function agentRunning(ctx, sessionId) {
+  if (!sessionId) return false
+  try {
+    return ctx.get?.('agents')?.get(sessionId)?.status === 'running'
+  } catch {
+    return false
+  }
+}
+
+/** POST /save：手动确定性快照（B4/B6）。label 只做展示，清洗后截断；编号服务端生成。 */
+async function handleSave(ctx, game, sessionId, req, res) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { ok: false, error: 'method-not-allowed' })
+    return
+  }
+  if (agentRunning(ctx, sessionId)) {
+    sendJson(res, 409, { ok: false, error: 'agent-running' })
+    return
+  }
+  const body = await readBodyBounded(req)
+  let label
+  try {
+    label = body ? JSON.parse(body)?.label : undefined
+  } catch {
+    // 非法 JSON：label 视为未提供，用自动友好名
+  }
+  try {
+    const save = withGameLock(game.dir, () =>
+      createSnapshot(game.dir, { kind: 'manual', label: label ?? '手动存档', sourceSession: sessionId }))
+    sendJson(res, 200, { ok: true, save })
+  } catch (error) {
+    const status = error.code === 'busy' ? 409 : 500
+    sendJson(res, status, { ok: false, error: error.code ?? 'save-failed', message: error.message })
+  }
+}
+
+/** POST /restore：真正 snapshot 回档（B10/B12/B13）。saveId 只接受服务端枚举值。 */
+async function handleRestore(ctx, game, sessionId, req, res) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { ok: false, error: 'method-not-allowed' })
+    return
+  }
+  if (agentRunning(ctx, sessionId)) {
+    sendJson(res, 409, { ok: false, error: 'agent-running' })
+    return
+  }
+  const body = await readBodyBounded(req)
+  let saveId = null
+  try {
+    saveId = body ? JSON.parse(body)?.saveId : null
+  } catch {
+    // 非法 JSON 落入下面的 400
+  }
+  const saveDir = typeof saveId === 'string' ? resolveSaveDir(game.dir, saveId) : null
+  if (!saveDir) {
+    sendJson(res, 400, { ok: false, error: 'invalid-save-id' })
+    return
+  }
+  try {
+    const save = withGameLock(game.dir, () => restoreSnapshot(game.dir, saveDir))
+    sendJson(res, 200, { ok: true, restored: save.id, requiresNewSession: true })
+  } catch (error) {
+    const status = error.code === 'busy' || error.code === 'save-incompatible' ? 409 : error.code === 'save-not-found' ? 404 : 500
+    sendJson(res, status, { ok: false, error: error.code ?? 'restore-failed', message: error.message })
+  }
+}
+
 /** 需要监视的目录集合：活档案 Owner 所在目录（不含 saves/）。 */
 function watchDirs(gameDir) {
   const dirs = [gameDir, path.join(gameDir, 'state'), path.join(gameDir, 'state', 'characters'), path.join(gameDir, 'mechanics')]
@@ -305,6 +375,19 @@ export function apply(ctx, config) {
 
       if (url.pathname.endsWith('/close-thread')) {
         await handleCloseThread(config, game, req, res)
+        return
+      }
+      if (url.pathname.endsWith('/saves')) {
+        // GET：枚举存档元数据（不含真实路径 / source session 等内部字段）
+        sendJson(res, 200, { game: { id: game.id }, saves: listSaves(game.dir) })
+        return
+      }
+      if (url.pathname.endsWith('/save')) {
+        await handleSave(ctx, game, sessionId, req, res)
+        return
+      }
+      if (url.pathname.endsWith('/restore')) {
+        await handleRestore(ctx, game, sessionId, req, res)
         return
       }
       if (url.pathname.endsWith('/events')) {
