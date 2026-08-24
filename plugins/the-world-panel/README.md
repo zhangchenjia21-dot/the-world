@@ -29,6 +29,13 @@ lib/client.js         构建产物（tsdown，不提交；__ModuleLoader__ 惰�
 npm run build:panel
 ```
 
+## 验证
+
+```bash
+# 渲染冒烟（需要 DSH Web 在 3080 运行；mini-react stub 驱动真实投影数据，不走浏览器）
+node plugins/the-world-panel/scripts/smoke-render.mjs
+```
+
 ## 部署（接入 D:\AI\deepseekharness）
 
 ```bash

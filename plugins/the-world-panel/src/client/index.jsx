@@ -6,10 +6,13 @@
  * - 启动与会话切换时探测当前会话：是 the-world preset 且 cwd 解析出 game → openTab 顶入视野；
  * - 面板组件按四分页渲染 Node 半投影；刷新由 SSE（fs.watch 驱动）触发，无定时轮询。
  *
+ * UI 是 game truth 的投影（DEC-B3）：解析层只重组既有 Markdown 的版式，
+ * 不增删内容、不产生第二事实源、无任何编辑入口。
+ *
  * 降级：inject 声明 betterSidebar——宿主缺失时本 fiber 永久等待（不报错、不崩 DSH），
  * 面板功能静默缺席（AC-7）。
  */
-import { createElement as h, useEffect, useMemo, useRef, useState } from 'react'
+import { createElement as h, useEffect, useRef, useState } from 'react'
 
 export const name = 'the-world-panel'
 export const inject = ['betterSidebar', 'sessions']
@@ -28,10 +31,72 @@ function eventsUrl(scope) {
   return stateUrl(scope).replace('/state?', '/events?')
 }
 
-/** ── 极简 Markdown 行渲染：标题 / 列表 / 复选 / 粗体 / 分隔线 ───────────── */
+/** ── 解析层：把稳定 Owner 的 Markdown 重组为结构化版式（只读投影） ──────── */
+
+/** 文件头部的 --- 围栏键值块（id/姓名/类型/updated 等）→ 元信息签。 */
+function splitDoc(text) {
+  if (!text) return { meta: [], body: '' }
+  const match = /^\s*---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?/.exec(text)
+  if (!match) return { meta: [], body: text }
+  const meta = match[1]
+    .split(/\r?\n/)
+    .map((line) => /^\s*([^:：]+)\s*[:：]\s*(.+)$/.exec(line))
+    .filter(Boolean)
+    .map((m) => [m[1].trim(), m[2].trim()])
+  return { meta, body: text.slice(match[0].length) }
+}
+
+/** 按 ## 分节 → { preamble, sections: [{title, text}] }。 */
+function sectionsOf(text) {
+  const parts = text.split(/^(#{2,3})\s+(.+)$/m)
+  // split 带捕获组：parts = [前导, '##', 标题1, 正文1, '##', 标题2, 正文2, ...]
+  const preamble = parts[0]?.trim() ?? ''
+  const sections = []
+  for (let i = 1; i + 2 <= parts.length; i += 3) {
+    sections.push({ title: parts[i + 1].trim(), text: (parts[i + 2] ?? '').trim() })
+  }
+  return { preamble, sections }
+}
+
+/** 抽取 bullets 正文（去掉引用行与空行后的条目列表）；无条目时返回 null。 */
+function bulletsOf(text) {
+  const items = []
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*[-*]\s+(.*)$/.exec(line)
+    if (m) items.push(m[1].trim())
+  }
+  return items.length ? items : null
+}
+
+/** THREADS.md 的 ### T-xx｜标题 条目 → quest 卡；解析不出结构时返回 null 走通用渲染。 */
+function parseQuests(text) {
+  if (!text) return null
+  const parts = text.split(/^(#{3,4})\s+(.+)$/m)
+  const quests = []
+  for (let i = 1; i + 2 <= parts.length; i += 3) {
+    const heading = parts[i + 1].trim()
+    const body = (parts[i + 2] ?? '').trim()
+    const m = /^([A-Za-z]+-\d+)\s*[｜|]\s*(.+)$/.exec(heading)
+    const fields = {}
+    for (const line of body.split(/\r?\n/)) {
+      const f = /^\s*[-*]\s*([^:：]+)\s*[:：]\s*(.*)$/.exec(line)
+      if (f) fields[f[1].trim()] = f[2].trim()
+    }
+    quests.push(m ? { id: m[1], title: m[2].trim(), fields, raw: body } : { id: '', title: heading, fields, raw: body })
+  }
+  return quests.length ? quests : null
+}
+
+/** 从角色卡正文标题行（# 乱世三国｜玩家角色：张宸嘉）提取显示名。 */
+function displayNameOf(docBody, fallback) {
+  const m = /^#\s+.+?[:：]\s*(.+)$/m.exec(docBody)
+  return m?.[1]?.trim() || fallback
+}
+
+/** ── 渲染层 ─────────────────────────────────────────────────────────────── */
 
 function renderInline(text, keyPrefix) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|「[^」]+」)/g)
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) return h('strong', { key: `${keyPrefix}-${i}` }, part.slice(2, -2))
     if (part.startsWith('`') && part.endsWith('`')) return h('code', { key: `${keyPrefix}-${i}` }, part.slice(1, -1))
@@ -39,53 +104,168 @@ function renderInline(text, keyPrefix) {
   })
 }
 
+/** 通用 Markdown 体渲染：引用注记 / 列表 / 标题 / 分隔线。 */
 function Markdown({ text }) {
   if (!text) return h('div', { className: 'twp-empty' }, '（空）')
-  const lines = text.split('\n')
+  const lines = text.split(/\r?\n/)
   const out = []
   let listBuffer = []
-
   const flushList = (key) => {
     if (listBuffer.length === 0) return
-    out.push(
-      h(
-        'ul',
-        { key, className: 'twp-list' },
-        listBuffer.map((item, i) =>
-          h('li', { key: i, className: item.checked === true ? 'twp-checked' : item.checked === false ? 'twp-unchecked' : '' }, renderInline(item.text, `${key}-${i}`))
-        )
-      )
-    )
+    out.push(h('ul', { key, className: 'twp-list' }, listBuffer.map((item, i) => h('li', { key: i }, renderInline(item, `${key}-${i}`)))))
     listBuffer = []
   }
-
   lines.forEach((line, index) => {
     const key = `l${index}`
     const heading = /^(#{1,4})\s+(.*)$/.exec(line)
+    const quote = /^\s*>\s?(.*)$/.exec(line)
     const bullet = /^\s*[-*]\s+(.*)$/.exec(line)
-    const checkbox = /^\s*[-*]\s+\[([ xX])\]\s+(.*)$/.exec(line)
-    if (checkbox) {
-      listBuffer.push({ text: checkbox[2], checked: checkbox[1] !== ' ' })
-      return
-    }
     if (bullet) {
-      listBuffer.push({ text: bullet[1], checked: null })
+      listBuffer.push(bullet[1])
       return
     }
     flushList(`${key}-ul`)
     if (heading) {
-      const level = heading[1].length
-      out.push(h(`h${Math.min(level + 1, 6)}`, { key, className: `twp-h twp-h${level}` }, renderInline(heading[2], key)))
+      out.push(h('div', { key, className: 'twp-md-h' }, renderInline(heading[2], key)))
+    } else if (quote) {
+      out.push(h('div', { key, className: 'twp-md-quote' }, renderInline(quote[1], key)))
     } else if (/^\s*---+\s*$/.test(line)) {
-      out.push(h('hr', { key, className: 'twp-hr' }))
+      // 分隔线在卡片版式里省略
     } else if (line.trim() === '') {
-      out.push(h('div', { key, className: 'twp-gap' }))
+      // 卡片间距由 CSS 控制
     } else {
-      out.push(h('p', { key, className: 'twp-p' }, renderInline(line, key)))
+      out.push(h('p', { key, className: 'twp-md-p' }, renderInline(line, key)))
     }
   })
   flushList('tail-ul')
   return h('div', { className: 'twp-md' }, out)
+}
+
+/** 元信息签行（id / 类型 / updated 等）。 */
+function MetaChips({ meta, omitKeys = [] }) {
+  const shown = meta.filter(([k]) => !omitKeys.includes(k))
+  if (shown.length === 0) return null
+  return h(
+    'div',
+    { className: 'twp-chips' },
+    shown.map(([k, v]) => h('span', { key: k, className: 'twp-chip' }, h('em', null, k), v))
+  )
+}
+
+/** 分节面板：小篆风标题 + 条目列表。 */
+function SectionCard({ title, text }) {
+  const bullets = bulletsOf(text)
+  return h(
+    'section',
+    { className: 'twp-card' },
+    h('header', { className: 'twp-card-h' }, h('span', { className: 'twp-card-seal' }, '❖'), title),
+    bullets
+      ? h('ul', { className: 'twp-list' }, bullets.map((item, i) => h('li', { key: i }, renderInline(item, `b${i}`))))
+      : h(Markdown, { text })
+  )
+}
+
+/** 卷首题注（> 开头的 Owner 说明行）。 */
+function Preamble({ text }) {
+  if (!text) return null
+  const notes = text.split(/\r?\n/).filter((l) => /^\s*>/.test(l)).map((l) => l.replace(/^\s*>\s?/, ''))
+  const plain = text.split(/\r?\n/).filter((l) => !/^\s*>/.test(l) && l.trim() !== '' && !/^#{1,4}\s/.test(l))
+  return h(
+    'div',
+    { className: 'twp-preamble' },
+    notes.map((n, i) => h('div', { key: `n${i}`, className: 'twp-note' }, renderInline(n, `n${i}`))),
+    plain.length ? h(Markdown, { text: plain.join('\n') }) : null
+  )
+}
+
+/** 角色页：人物卡（画轴眉 + 名讳 + 元信息签）+ 各分节面板。 */
+function PlayerSheet({ text }) {
+  const { meta, body } = splitDoc(text)
+  const { preamble, sections } = sectionsOf(body)
+  const name = meta.find(([k]) => k === '姓名')?.[1] ?? displayNameOf(body, '玩家角色')
+  return h(
+    'div',
+    null,
+    h(
+      'div',
+      { className: 'twp-hero' },
+      h('div', { className: 'twp-avatar' }, name.slice(0, 1)),
+      h(
+        'div',
+        { className: 'twp-hero-m' },
+        h('div', { className: 'twp-hero-name' }, name),
+        h(MetaChips, { meta, omitKeys: ['姓名'] })
+      )
+    ),
+    h(Preamble, { text: preamble }),
+    sections.map((s) => h(SectionCard, { key: s.title, title: s.title, text: s.text }))
+  )
+}
+
+/** 人物页：NPC 名册卡。 */
+function NpcCard({ id, text }) {
+  const { meta, body } = splitDoc(text)
+  const { preamble, sections } = sectionsOf(body)
+  const name = meta.find(([k]) => k === '姓名')?.[1] ?? displayNameOf(body, id)
+  const kind = meta.find(([k]) => k === '类型')?.[1]
+  return h(
+    'details',
+    { className: 'twp-card twp-npc' },
+    h(
+      'summary',
+      null,
+      h('span', { className: 'twp-avatar sm' }, name.slice(0, 1)),
+      h('span', { className: 'twp-npc-name' }, name),
+      kind ? h('span', { className: 'twp-badge' }, kind) : null,
+      h('span', { className: 'twp-npc-id' }, id)
+    ),
+    h(MetaChips, { meta, omitKeys: ['姓名', '类型'] }),
+    h(Preamble, { text: preamble }),
+    sections.map((s) => h(SectionCard, { key: s.title, title: s.title, text: s.text }))
+  )
+}
+
+/** 物品 / 系统页：机制卡。 */
+function MechanicCard({ id, text, defaultOpen }) {
+  const { preamble, sections } = sectionsOf(text)
+  return h(
+    'details',
+    { className: 'twp-card twp-mech', open: defaultOpen },
+    h('summary', null, h('span', { className: 'twp-card-seal' }, '⚙'), h('span', { className: 'twp-npc-name' }, id)),
+    h(Preamble, { text: preamble }),
+    sections.map((s) => h(SectionCard, { key: s.title, title: s.title, text: s.text }))
+  )
+}
+
+/** 任务页：quest log。状态 → 徽章色调。 */
+function questTone(status) {
+  if (!status) return ''
+  if (/紧急|紧迫|倒计时/.test(status)) return 'urgent'
+  if (/长期/.test(status)) return 'long'
+  return 'open'
+}
+
+function QuestCard({ quest }) {
+  const status = quest.fields['状态'] ?? ''
+  const rest = Object.entries(quest.fields).filter(([k]) => k !== '状态')
+  return h(
+    'section',
+    { className: `twp-card twp-quest ${questTone(status)}` },
+    h(
+      'header',
+      { className: 'twp-quest-h' },
+      quest.id ? h('span', { className: 'twp-quest-id' }, quest.id) : null,
+      h('span', { className: 'twp-quest-title' }, quest.title),
+      status ? h('span', { className: `twp-badge ${questTone(status)}` }, status) : null
+    ),
+    rest.length
+      ? h(
+          'dl',
+          { className: 'twp-quest-f' },
+          rest.flatMap(([k, v]) => [h('dt', { key: `k${k}` }, k), h('dd', { key: `v${k}` }, renderInline(v, `q${k}`))])
+        )
+      : h(Markdown, { text: quest.raw })
+  )
 }
 
 /** ── 四分页 ─────────────────────────────────────────────────────────────── */
@@ -111,30 +291,26 @@ function PanelBody({ data }) {
   }
   let content = null
   if (sub === 'player') {
-    content = h(Markdown, { text: data.player?.text })
+    content = data.player?.text
+      ? h(PlayerSheet, { text: data.player.text })
+      : h('div', { className: 'twp-empty' }, '（PLAYER.md 尚未建立）')
   } else if (sub === 'characters') {
     content = h(
       'div',
       null,
-      data.charactersIndex ? h('details', { className: 'twp-details' }, h('summary', null, '人物索引'), h(Markdown, { text: data.charactersIndex.text })) : null,
       data.characters.length === 0 ? h('div', { className: 'twp-empty' }, '（暂无人物档案）') : null,
-      data.characters.map((c) =>
-        h('details', { key: c.id, className: 'twp-details' }, h('summary', null, c.id), h(Markdown, { text: c.text }))
-      )
+      data.characters.map((c) => h(NpcCard, { key: c.id, id: c.id, text: c.text }))
     )
   } else if (sub === 'mechanics') {
     content =
       data.mechanics.length === 0
         ? h('div', { className: 'twp-empty' }, '（本局未启用带长期状态的机制）')
-        : h(
-            'div',
-            null,
-            data.mechanics.map((m) =>
-              h('details', { key: m.id, className: 'twp-details', open: data.mechanics.length === 1 }, h('summary', null, m.id), h(Markdown, { text: m.text }))
-            )
-          )
+        : h('div', null, data.mechanics.map((m) => h(MechanicCard, { key: m.id, id: m.id, text: m.text, defaultOpen: data.mechanics.length === 1 })))
   } else {
-    content = h(Markdown, { text: data.threads?.text })
+    const quests = parseQuests(data.threads?.text)
+    content = quests
+      ? h('div', null, quests.map((q, i) => h(QuestCard, { key: q.id || i, quest: q })))
+      : h(Markdown, { text: data.threads?.text })
   }
   return h(
     'div',
@@ -193,7 +369,8 @@ function WorldPanel(props) {
     h(
       'div',
       { className: 'twp-header' },
-      h('span', { className: 'twp-title' }, data?.game ? `世界：${data.game.id}` : '世界'),
+      h('span', { className: 'twp-seal' }, '世'),
+      h('span', { className: 'twp-title' }, data?.game ? data.game.id : '世界'),
       data?.game?.updatedAt ? h('span', { className: 'twp-updated' }, `更新于 ${formatTime(data.game.updatedAt)}`) : null,
       h('button', { className: 'twp-refresh', title: '刷新', onClick: load }, '⟳')
     ),
@@ -202,34 +379,93 @@ function WorldPanel(props) {
   )
 }
 
-/** ── 样式（随 factory 物化注入一次） ────────────────────────────────────── */
+/** ── 样式：宣纸 / 墨色 / 朱砂 / 鎏金的卷轴风（随 factory 物化注入一次） ──── */
 
 const CSS = `
-.twp-root { display: flex; flex-direction: column; height: 100%; font-size: 13px; color: var(--fg, inherit); }
-.twp-header { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border, #4443); }
-.twp-title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.twp-updated { opacity: 0.6; font-size: 11px; }
-.twp-refresh { border: none; background: none; cursor: pointer; font-size: 14px; color: inherit; opacity: 0.7; }
+.twp-root { display: flex; flex-direction: column; height: 100%; font-size: 13px;
+  color: var(--fg, #2b2620); background: var(--bg, #f6f1e5); }
+.twp-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-bottom: 2px solid #b8860b55; background: linear-gradient(#fbf7ec, #f3eddc); }
+.twp-seal { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+  border-radius: 4px; background: #9e2b25; color: #f6f1e5; font-weight: 700; font-size: 13px;
+  font-family: "STKaiti", "KaiTi", serif; box-shadow: 0 1px 2px #0003; }
+.twp-title { font-weight: 700; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: "STKaiti", "KaiTi", serif; font-size: 15px; letter-spacing: 1px; }
+.twp-updated { opacity: 0.55; font-size: 11px; }
+.twp-refresh { border: none; background: none; cursor: pointer; font-size: 14px; color: inherit; opacity: 0.65; }
 .twp-refresh:hover { opacity: 1; }
 .twp-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.twp-subtabs { display: flex; gap: 2px; padding: 4px 6px; border-bottom: 1px solid var(--border, #4443); }
-.twp-subtab { border: none; background: none; color: inherit; padding: 3px 10px; border-radius: 6px; cursor: pointer; opacity: 0.7; font-size: 12px; }
-.twp-subtab.active { opacity: 1; background: var(--active-bg, #8882); font-weight: 600; }
-.twp-content { flex: 1; overflow: auto; padding: 8px 12px; }
-.twp-md .twp-h { margin: 10px 0 4px; }
-.twp-md .twp-h1 { font-size: 15px; } .twp-md .twp-h2 { font-size: 14px; } .twp-md .twp-h3, .twp-md .twp-h4 { font-size: 13px; }
-.twp-p { margin: 3px 0; line-height: 1.55; }
-.twp-gap { height: 6px; }
-.twp-list { margin: 3px 0; padding-left: 18px; }
-.twp-list li { margin: 2px 0; line-height: 1.5; }
-.twp-checked { opacity: 0.55; text-decoration: line-through; }
-.twp-unchecked { list-style-type: '☐ '; }
-.twp-hr { border: none; border-top: 1px solid var(--border, #4443); margin: 8px 0; }
-.twp-details { margin: 4px 0; border: 1px solid var(--border, #4443); border-radius: 8px; padding: 4px 8px; }
-.twp-details summary { cursor: pointer; font-weight: 600; padding: 2px 0; }
-.twp-empty, .twp-idle { opacity: 0.6; padding: 12px 4px; line-height: 1.6; }
-.twp-error { color: var(--error, #e5534b); padding: 6px 10px; font-size: 12px; }
-.twp-md code { background: var(--code-bg, #8882); border-radius: 4px; padding: 0 4px; font-size: 12px; }
+.twp-subtabs { display: flex; gap: 4px; padding: 6px 10px; border-bottom: 1px solid #b8860b33; background: #f3eddca0; }
+.twp-subtab { border: 1px solid transparent; background: none; color: inherit; padding: 4px 12px;
+  border-radius: 6px 6px 0 0; cursor: pointer; opacity: 0.65; font-size: 12.5px;
+  font-family: "STKaiti", "KaiTi", serif; letter-spacing: 2px; }
+.twp-subtab:hover { opacity: 0.9; }
+.twp-subtab.active { opacity: 1; background: #fffdf6; border-color: #b8860b55; border-bottom-color: #fffdf6;
+  font-weight: 700; color: #9e2b25; }
+.twp-content { flex: 1; overflow: auto; padding: 10px 12px 16px; }
+
+.twp-hero { display: flex; gap: 12px; align-items: center; padding: 12px; margin-bottom: 10px;
+  background: #fffdf6; border: 1px solid #b8860b44; border-radius: 10px; box-shadow: 0 1px 3px #6b5a2a18; }
+.twp-avatar { display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px;
+  border-radius: 50%; background: radial-gradient(circle at 35% 30%, #c14a42, #9e2b25); color: #f9f3e3;
+  font-size: 22px; font-family: "STKaiti", "KaiTi", serif; border: 2px solid #b8860b88; flex: none; }
+.twp-avatar.sm { width: 24px; height: 24px; font-size: 13px; }
+.twp-hero-name { font-size: 17px; font-weight: 700; font-family: "STKaiti", "KaiTi", serif; letter-spacing: 2px; }
+.twp-hero-m { min-width: 0; }
+
+.twp-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.twp-chip { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #b8860b18;
+  border: 1px solid #b8860b44; color: #6b5a2a; }
+.twp-chip em { font-style: normal; opacity: 0.6; margin-right: 4px; }
+
+.twp-preamble { margin: 0 2px 10px; }
+.twp-note { font-size: 11.5px; color: #6b5a2a; opacity: 0.85; line-height: 1.6; padding-left: 8px;
+  border-left: 2px solid #b8860b55; margin: 2px 0; }
+
+.twp-card { background: #fffdf6; border: 1px solid #b8860b44; border-radius: 10px;
+  padding: 8px 12px 10px; margin-bottom: 10px; box-shadow: 0 1px 3px #6b5a2a14; }
+.twp-card-h { display: flex; align-items: center; gap: 6px; font-family: "STKaiti", "KaiTi", serif;
+  font-weight: 700; font-size: 14px; letter-spacing: 2px; color: #9e2b25;
+  border-bottom: 1px dashed #b8860b44; padding-bottom: 5px; margin-bottom: 6px; }
+.twp-card-seal { color: #b8860b; font-size: 11px; }
+
+.twp-list { margin: 4px 0; padding-left: 4px; list-style: none; }
+.twp-list li { margin: 5px 0; line-height: 1.65; padding-left: 14px; position: relative; }
+.twp-list li::before { content: "◆"; position: absolute; left: 0; top: 0; font-size: 8px; color: #b8860baa; line-height: 2.2; }
+.twp-md-p { margin: 4px 0; line-height: 1.65; }
+.twp-md-h { font-weight: 700; margin: 6px 0 3px; font-family: "STKaiti", "KaiTi", serif; letter-spacing: 1px; }
+.twp-md-quote { color: #6b5a2a; opacity: 0.85; font-size: 11.5px; line-height: 1.6; padding-left: 8px;
+  border-left: 2px solid #b8860b55; margin: 2px 0; }
+.twp-md code { background: #b8860b18; border-radius: 4px; padding: 0 4px; font-size: 12px; }
+.twp-md strong { color: #9e2b25; }
+
+.twp-npc, .twp-mech { padding: 0; overflow: hidden; }
+.twp-npc > summary, .twp-mech > summary { display: flex; align-items: center; gap: 8px; cursor: pointer;
+  padding: 8px 12px; list-style: none; }
+.twp-npc > summary::-webkit-details-marker, .twp-mech > summary::-webkit-details-marker { display: none; }
+.twp-npc > summary:hover, .twp-mech > summary:hover { background: #b8860b12; }
+.twp-npc .twp-chips, .twp-npc .twp-preamble, .twp-npc .twp-card,
+.twp-mech .twp-preamble, .twp-mech .twp-card { margin-left: 12px; margin-right: 12px; }
+.twp-npc > .twp-card, .twp-mech > .twp-card { box-shadow: none; }
+.twp-npc-name { font-weight: 700; font-family: "STKaiti", "KaiTi", serif; letter-spacing: 1px; font-size: 14px; }
+.twp-npc-id { margin-left: auto; font-size: 10.5px; opacity: 0.45; }
+.twp-badge { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; background: #3a6b3518;
+  border: 1px solid #3a6b3544; color: #3a6b35; }
+.twp-badge.urgent { background: #9e2b2514; border-color: #9e2b2544; color: #9e2b25; }
+.twp-badge.long { background: #b8860b18; border-color: #b8860b44; color: #6b5a2a; }
+
+.twp-quest-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.twp-quest-id { font-size: 10.5px; font-weight: 700; color: #f6f1e5; background: #6b5a2a;
+  padding: 1px 6px; border-radius: 4px; letter-spacing: 0.5px; flex: none; }
+.twp-quest.urgent .twp-quest-id { background: #9e2b25; }
+.twp-quest-title { font-weight: 700; font-family: "STKaiti", "KaiTi", serif; letter-spacing: 1px;
+  font-size: 13.5px; flex: 1; }
+.twp-quest-f { margin: 4px 0 2px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+.twp-quest-f dt { font-size: 11px; color: #6b5a2a; opacity: 0.75; white-space: nowrap; padding-top: 1px; }
+.twp-quest-f dd { margin: 0; line-height: 1.6; }
+
+.twp-empty, .twp-idle { opacity: 0.55; padding: 14px 6px; line-height: 1.7; }
+.twp-error { color: #9e2b25; padding: 6px 12px; font-size: 12px; }
 `
 
 function injectCss() {
