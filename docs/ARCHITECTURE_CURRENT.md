@@ -1,11 +1,11 @@
 ---
 title: The World｜DSH-native RPG 工作架构
 status: current-experimental-architecture
-version: 0.5
+version: 0.6
 updated: 2026-08-24
 canonical_product_spec: PRODUCT_SPEC_CURRENT.md
 reference_host: DeepSeek Harness
-current_stage: TW-01 Minimal World Core
+current_stage: Reality Gate B / RPG Experience Validation
 ---
 
 # The World｜DSH-native RPG 工作架构 CURRENT
@@ -26,16 +26,18 @@ RPG Experience / Mechanics Plugins
 = UI + Map + Mechanics + Expansion Value
 ```
 
-TW-00.5 Bare DSH Probe 已结束。实验最终证明：
+TW-00.5 Bare DSH Probe 已结束，TW-01 / Reality Gate A 已于 2026-08-24 通过真实长局人工体验裁定。
+
+实验最终证明：
 
 - DSH + 强模型本身非常会主持 RPG；
-- 主要长期缺口不在“不会写故事”，而在**长期维护职责会衰减、动态实体易漏写、知识边界会泄漏、节奏缺少生活层，以及宿主/UI 游戏化不足**。
+- 主要长期缺口不在“不会写故事”，而在**长期维护职责会衰减、动态实体易漏写、知识边界会泄漏、节奏缺少生活层，以及宿主/UI 游戏化不足**；
+- World Core 可以用薄职责层补足这些长期缺口，而不需要重建第二套 Agent Runtime；
+- 当前架构重点已从“证明长期世界能成立”推进到“证明 RPG 专用插件能 materially improve 玩家体验”。
 
-因此 TW-01 架构目标收紧为：
+正式原则：
 
 > **只程序化稳定职责与边界，不程序化叙事本身。**
-
-原则：
 
 > **DSH-native, not DSH-internal-coupled.**
 
@@ -84,16 +86,19 @@ plugins/
 → World Core + RPG Experience / Mechanics Plugins
 
 games/<game-id>/COMPOSITION.md
-→ player-confirmed game composition（World / Player Character / Expansion / Control Mode），本局 canonical 配置
+→ player-confirmed game composition（World / Player Character / Expansion / Control Mode / Save Policy），本局 canonical 配置
 
 games/<game-id>/state/
 → current game-local canonical reality
 
+games/<game-id>/mechanics/
+→ enabled mechanics 的本局当前状态
+
 games/<game-id>/story/
-→ important history / commitments / consequences / unresolved hooks
+→ important history / resolved threads / consequences
 
 games/<game-id>/memory/
-→ lossy context compression / retrieval aids
+→ pending durable deltas + lossy context compression / retrieval aids
 
 games/<game-id>/saves/
 → explicit recovery points
@@ -107,20 +112,21 @@ docs/
 
 ---
 
-## 3. World Core v0.1｜Evidence-driven Thin Core
+## 3. World Core｜Evidence-driven Thin Core
 
-World Core 是 TW-01 Shared Foundation。
+World Core 是 The World Shared Foundation，不是第二套 Runtime。
 
 ### 3.1 Game Entry / Continue
 
 World Core 应能在 Session 开始时：
 
 - 确认当前 game；
-- 新 game：先执行 Game Composition 确认（World / Player Character / Expansion / Control Mode），未确认完成不进入正式叙事；
+- 新 game：先执行 Game Composition 确认，未确认完成不进入正式叙事；
 - 旧 game：读取玩家已确认的本局组合配置，继续使用而不是重新决定；
 - 找到恢复入口；
 - 读取最小 current state；
-- 按需读取 unresolved story / recent memory；
+- 读取未归并 DELTAS；
+- 按需读取 unresolved threads / recent memory；
 - 提供当前 protagonist control mode；
 - 注入少量高价值 GM / world semantics。
 
@@ -132,19 +138,28 @@ World Core 应能在 Session 开始时：
 
 Bare DSH 最终确认的核心失败：**长局后文件维护逐渐衰减，最后停止。**
 
-因此 World Core 必须让 maintenance 成为稳定 lifecycle responsibility。
-
-概念流程：
+当前采用 Game Workspace Architecture v0.2 的两层维护：
 
 ```text
-GM response / world progression
+[Player-facing narrative]
 ↓
-Durable Change Review
+Tier 1｜Delta Capture（每玩家回合）
+→ 只捕获本轮 1–3 条新的 durable facts
+→ 追加 memory/DELTAS.md
+→ 条目自写入起即为有效 game-local fact
 ↓
-本轮是否产生未来仍需成立的变化？
-├─ No  → 不写
-└─ Yes → 更新正确 Owner
+Tier 2｜Checkpoint Consolidation
+→ 场景收束 / 时间大跳 / 每 N 玩家回合 / 存档前
+→ 将 DELTAS 逐条归并到正确 Owner
+→ 清除已归并条目
+→ 刷新 RECENT / recovery metadata
+→ 需要时建立 Save Point
 ```
+
+这解决两个相反压力：
+
+- durable fact 必须每回合及时捕获，不能等模型“以后记得”；
+- 不应每回合重读和重写整个 workspace。
 
 候选 durable changes：
 
@@ -153,12 +168,13 @@ Durable Change Review
 - 承诺 / 债务 / 仇恨；
 - 同伴 / 敌对 / 雇佣；
 - 持续伤情 / 能力；
-- 任务长期状态；
+- 线程长期状态；
 - 地点变化；
 - 势力 / 世界局势变化；
 - 重大资源变化；
 - unresolved consequence；
-- 大幅时间推进后的 current world state。
+- 大幅时间推进后的 current world state；
+- enabled mechanics 的长期状态变化。
 
 禁止：
 
@@ -172,7 +188,7 @@ Durable Change Review
 
 > **Importance controls attention, not existence.**
 
-第一阶段不建设 Entity DB；只要求能稳定认出同一实体。
+当前仍不建设通用 Entity DB；实体文件只要求稳定 identity 与足够的 game-local事实。
 
 ### 3.4 Knowledge / Exposure Boundary
 
@@ -201,7 +217,7 @@ NPC 可使用知识来源：
 - 合理推断；
 - 显式系统 / 超自然权限。
 
-第一版不建 Knowledge ACL / provenance DB。
+当前不建 Knowledge ACL / provenance DB。
 
 ### 3.5 Player Authorization Context
 
@@ -241,15 +257,16 @@ World Core 只提供语义：
 
 ## 4. Turn / Lifecycle Model
 
-第一阶段继续依赖 DSH 正式 turn / step / session 基础，不另造 Formal Turn Engine。
+继续依赖 DSH 正式 turn / step / session 基础，不另造 Formal Turn Engine。
 
-目标生命周期：
+当前生命周期：
 
 ```text
 [Session Start / Continue]
 World Core
 → game recovery
 → bounded context
+→ unresolved DELTAS
 → control mode
 → core semantics
 
@@ -258,16 +275,20 @@ World Core
 → 自由 adjudicate / create / narrate
 
 [Player-facing Final]
-→ 正常游戏文本
+→ 正常游戏文本先对玩家可见
 
-[Post-turn / Post-step Maintenance]
-World Core responsibility
-→ durable change review
-→ selective write-back
-→ memory / recovery metadata when needed
+[Post-turn Maintenance]
+→ 普通回合：Tier 1 delta capture
+→ 检查点回合：Tier 2 consolidation
+→ 到存档条件：归并后建立 snapshot
+→ maintenance completion 不输出玩家可见通知
 ```
 
-如果 DSH 不提供理想的 post-turn seam，TW-01 选择最薄的官方 / documented 可行替代，而不是 patch Agent internals。
+关键体验决策：
+
+> **Narrative first, maintenance in the background step while the player reads.**
+
+不把 maintenance 前置到玩家可见叙事之前，以免增加感知延迟。
 
 ---
 
@@ -291,8 +312,10 @@ games/<game-id>/
 │  └─ places/              # 按需：同上
 ├─ mechanics/              # 本局机制运行状态（README 清单 + <机制>/STATE.md 按需）
 ├─ story/                  # LEDGER：重要历史与已归档线程
-├─ memory/                 # RECENT：压缩记忆
-└─ saves/                  # 恢复点（Persistent State ≠ Save Point）
+├─ memory/
+│  ├─ DELTAS.md            # 待归并 durable facts；写入即生效
+│  └─ RECENT.md            # 恢复用压缩记忆
+└─ saves/                  # 恢复点（Persistent State != Save Point）
 ```
 
 核心约定：
@@ -303,12 +326,25 @@ games/<game-id>/
 - Expansion Pack 只声明「哪些事实值得长期记住」，存到哪里由 World Core 决定。
 - 保持 Markdown-first；不建完整 Entity Schema / JSON DB / Universal Manifest。
 
+### Save Policy
+
+Persistent State 与 Save Point 明确分离：
+
+- 无论玩家选择哪种存档策略，活 workspace 都持续维护；
+- Save 是显式可回滚 snapshot；
+- 自动存档策略在 New Game Setup 中由玩家确认并写入 `COMPOSITION.md`；
+- 自动档可滚动保留，手动档不自动删除；
+- snapshot 默认覆盖 `COMPOSITION.md + state/ + mechanics/ + story/ + memory/`，不递归保存 `saves/`。
+
+---
+
 ## 6. Recovery Model
 
 ```text
 game README
 → state/CURRENT
-→ recent / unresolved memory
+→ memory/DELTAS（未归并事实）
+→ RECENT / THREADS
 → relevant story
 → necessary source
 → older history on demand
@@ -318,11 +354,13 @@ game README
 Game History Growth != Agent Context Growth
 ```
 
-Fresh-session recovery 是 Gate A 必测项。
+Fresh-session recovery 已通过 Reality Gate A 的真实试玩验证。
 
-最终 Save / Restore 需要避免：
+最终 Restore 仍需要避免：
 
 > 文件回到 T2，但 Session / Agent context 仍在 T5。
+
+因此完整 player-facing Restore Surface 仍属于后续产品能力。
 
 ---
 
@@ -335,7 +373,7 @@ Fresh-session recovery 是 Gate A 必测项。
 - `game-local reality > source default trajectory`；
 - 已发生历史分叉不得静默修正回 Source。
 
-Source Fidelity（正史 / 演义 / 混合 / 原创）后续按真实资产需求继续收敛。
+DSH-native 资产创作规范进一步明确：资产写世界 / 人物 / 机制语义，不声明具体 workspace 路径、Runtime loader、机器依赖图或 UI binding。
 
 ---
 
@@ -355,23 +393,66 @@ Source Fidelity（正史 / 演义 / 混合 / 原创）后续按真实资产需�
 
 这些能力由**产品价值**驱动，不要求先证明模型失败。
 
-### Chat + Persistent UI
+### 8.1 Chat + Persistent UI
 
 > **Chat 展示机制事件；UI 承载机制当前状态。**
 
-### UI Truth Boundary
+### 8.2 UI Truth Boundary
 
 ```text
 Canonical Game Workspace
         ↓
-Plugin Projection
+Player-facing View Model / Projection
         ↓
 RPG UI
 ```
 
 UI 不是第二事实源。
 
-### Agent Trace Presentation
+Player-facing View Model 可以跨多个 Owner 聚合玩家已知事实，但不持久化另一套 truth。
+
+### 8.3 Owner Architecture != Player Information Architecture
+
+Gate B 真实 UI 试玩暴露了新的重要边界：
+
+> **Workspace is organized for truth maintenance; UI is organized for player needs.**
+>
+> **工作区按事实归属组织，UI 按玩家需求组织。**
+
+因此：
+
+- `PLAYER.md` 不等于“角色页”；
+- `characters/` 不等于“把 INDEX.md 漂亮地列出来”；
+- `mechanics/<id>/STATE.md` 不等于“系统页原样渲染”；
+- `THREADS.md` 不等于必须把所有 open thread 叫做传统 Quest。
+
+UI 应回答玩家问题，例如：
+
+```text
+我是谁、现在怎么样？
+我认识谁、和我什么关系？
+我有什么？
+当前机制状态是什么？
+现在有什么事情值得我关注或处理？
+```
+
+默认开发信息——file path、Owner 说明、source path、internal id、raw updated metadata——属于 debug / inspect，不属于 RPG 主界面。
+
+### 8.4 Current Gate B Vertical｜the-world-panel
+
+`plugins/the-world-panel` 已证明：
+
+- DSH Web UI plugin 路线可行；
+- better-sidebar integration 可行；
+- workspace → Node projection → Web UI 可行；
+- `fs.watch + SSE` 的无轮询刷新可行；
+- 窄确定性 Thread 归档写口可行。
+
+当前重点不是继续增加页面，而是完成 Player Experience Redesign：从“Workspace Inspector 的 RPG 皮肤”转成真正以玩家状态、关系、资源、机制和决策为中心的 RPG 界面。
+
+Gate B 验收见：`docs/GATE_B_ACCEPTANCE_v0.1.md`。
+
+### 8.5 Agent Trace Presentation
 
 > **隐藏工作噪音，不限制 Agent 工作能力。**
 
@@ -393,7 +474,7 @@ Bare DSH Probe 还发现：偶发 reasoning / tool execution 已结束但没有 
 
 ## 10. World Core Non-scope
 
-TW-01 v0.1 不默认建设：
+World Core 不默认建设：
 
 - independent Agent Runtime；
 - narrative approval gate；
@@ -408,24 +489,33 @@ TW-01 v0.1 不默认建设：
 
 ---
 
-## 11. First Implementation Order
+## 11. Current Implementation Order
 
 ```text
-1. Current DSH extension seam survey
-2. Minimal World Core plugin skeleton
-3. Game-mode context injection
-4. Durable maintenance lifecycle hook
-5. Real 三国 vertical test game
-6. Reality Gate A stress test
+TW-00.5 Bare DSH Probe                       ✓ COMPLETE
+↓
+TW-01 World Core + persistent workspace      ✓
+↓
+Reality Gate A                               ✓ PASS
+↓
+Gate B first vertical: the-world-panel       ← CURRENT
+↓
+Player Experience Redesign
+↓
+真实试玩 Gate B
+↓
+根据真实价值决定下一批 RPG plugins
 ```
 
-详细执行见：`docs/TW-01_WORLD_CORE_PLAN.md`。
+当前不以新增更多机制 / 页面作为进度替代品。
 
 ---
 
-## 12. Reality Gate A
+## 12. Reality Gates
 
-至少证明：
+### Reality Gate A｜PASS
+
+已证明：
 
 - Want to Continue；
 - GM Quality Preserved；
@@ -435,6 +525,20 @@ TW-01 v0.1 不默认建设：
 - Cross-session Same World；
 - Player Plays, Agent Maintains。
 
+正式裁定：`docs/experiments/GATE_A_FINAL_2026-08-24.md`。
+
+### Reality Gate B｜CURRENT
+
+当前至少要求：
+
+- Material RPG Value；
+- Canonical Truth Projection；
+- Player-facing Information Architecture；
+- Does Not Damage the Game Loop；
+- Not a Single-save Accident。
+
+详细验收：`docs/GATE_B_ACCEPTANCE_v0.1.md`。
+
 ---
 
 ## 13. Architecture Decision
@@ -443,10 +547,13 @@ TW-01 v0.1 不默认建设：
 
 > **World Core 应该是小而持续的职责层，而不是大而严格的规则层。**
 
-它要让 AI GM “按程序办事”的部分是：
+> **Workspace 按事实归属组织；UI 按玩家需求组织。**
+
+World Core 要让 AI GM “按程序办事”的部分是：
 
 - 进入 / 恢复游戏；
-- 稳定维护 durable facts；
+- 稳定捕获 durable facts；
+- 在检查点归并到正确 Owner；
 - 正确区分知识暴露；
 - 遵守当前主角授权范围；
 - 在长期节奏中保留生活与自由活动空间。
@@ -457,3 +564,5 @@ TW-01 v0.1 不默认建设：
 - NPC 必须做什么决定；
 - 玩家只能做什么；
 - 每一个世界事实必须通过程序审批。
+
+RPG UI 负责把 canonical truth 组织成玩家真正有用的界面，但不拥有另一套长期真相。
