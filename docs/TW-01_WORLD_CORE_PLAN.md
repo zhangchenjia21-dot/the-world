@@ -202,10 +202,14 @@ World Core
 [Player-facing response]
 → 正常游戏文本
 
-[Post-turn maintenance]
+[Post-turn maintenance — Tier 1（每回合）]
 → 判断 durable changes
-→ 只更新受影响 Owner
-→ 必要时更新 recent memory / recovery metadata
+→ 只向 memory/DELTAS.md 追加 1–3 行（自写入起即为有效事实）
+
+[Checkpoint consolidation — Tier 2（场景收束 / 时间大跳 / 每 N 玩家回合）]
+→ 把 DELTAS 逐条归并到受影响 Owner
+→ 移除已归并条目，刷新 recent memory / recovery metadata
+→ 到达存档回合时先归并再做存档快照
 ```
 
 重点：
@@ -214,6 +218,7 @@ World Core
 - 不要求模型先提交 typed proposal；
 - 不要求每回合全仓读取；
 - 不要求每回合全文件 rewrite；
+- 每回合维护只做轻量捕获，批量归并推迟到检查点；
 - maintenance 是 Agent 的游戏后台职责，而不是玩家任务。
 
 ---

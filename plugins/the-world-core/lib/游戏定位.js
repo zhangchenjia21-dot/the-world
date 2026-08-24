@@ -141,3 +141,18 @@ export function readCompositionStatus(gameDir) {
     ? 'confirmed'
     : 'pending'
 }
+
+const SAVE_INTERVAL_PATTERN = /每\s*(\d+)\s*(?:个)?玩家回合/
+
+/**
+ * 从 COMPOSITION.md 解析自动存档间隔（每 N 玩家回合）。
+ * 手动存档或无法解析时返回 null——调用方使用自己的默认节奏。
+ */
+export function readSavePolicyInterval(gameDir) {
+  const composition = readBounded(path.join(gameDir, COMPOSITION_FILE), 65536)
+  if (!composition) return null
+  const match = SAVE_INTERVAL_PATTERN.exec(composition.text)
+  if (!match) return null
+  const n = Number.parseInt(match[1], 10)
+  return Number.isFinite(n) && n > 0 ? n : null
+}

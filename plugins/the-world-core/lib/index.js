@@ -15,6 +15,7 @@ import {
   readGameDynamics,
   readBounded,
   readCompositionStatus,
+  readSavePolicyInterval,
   COMPOSITION_FILE
 } from './游戏定位.js'
 import {
@@ -24,7 +25,8 @@ import {
   buildNoGameInjection,
   buildSetupResumeInjection,
   buildSetupContinueText,
-  buildMaintenanceText
+  buildMaintenanceText,
+  buildConsolidationText
 } from './提示文本.js'
 import path from 'node:path'
 
@@ -35,7 +37,8 @@ export const Config = z.object({
   gamesDir: z.string().default('games'),
   templateDir: z.string().default('games/_template'),
   maxFileChars: z.number().default(12000),
-  maintenance: z.boolean().default(true)
+  maintenance: z.boolean().default(true),
+  consolidationInterval: z.number().default(10)
 })
 
 const SOURCE = { kind: 'plugin', plugin: name }
@@ -123,9 +126,10 @@ export function apply(ctx, config) {
       const current = readBounded(path.join(game.dir, 'state', 'CURRENT.md'), config.maxFileChars)
       const recent = readBounded(path.join(game.dir, 'memory', 'RECENT.md'), config.maxFileChars)
       const composition = readBounded(path.join(game.dir, COMPOSITION_FILE), config.maxFileChars)
+      const deltas = readBounded(path.join(game.dir, 'memory', 'DELTAS.md'), config.maxFileChars)
 
       agent.inject(userMessage(
-        buildRecoveryInjection({ game, source, current, recent, composition }),
+        buildRecoveryInjection({ game, source, current, recent, composition, deltas }),
         'recovery'
       ))
     } catch (error) {
@@ -138,6 +142,10 @@ export function apply(ctx, config) {
   // 上限只用于防止模型持续拒绝工具时形成无限 steering。
   const setupNudges = new WeakMap()
   const maintainedTurns = new WeakMap()
+  // 玩家回合计数：只用于决定何时把「delta 捕获」升级为「检查点归并」。
+  // 计数器随 Session 生命周期，不追求跨 Session 精确——DELTAS.md 本身是持久事实源，
+  // 归并早一点晚一点都不丢事实。
+  const playerTurnCounts = new WeakMap()
 
   ctx.on('agent/turn-stopping', ({ agent, turn, signal }) => {
     if (signal?.aborted) return
@@ -148,6 +156,7 @@ export function apply(ctx, config) {
       const compositionStatus = game ? readCompositionStatus(game.dir) : null
 
       if (compositionStatus !== 'confirmed') {
+        if (!game) return
         const priorNudges = countForTurn(setupNudges, agent, turn)
         if (priorNudges >= MAX_SETUP_NUDGES_PER_TURN) return
 
@@ -165,7 +174,15 @@ export function apply(ctx, config) {
       if (turns.has(turn)) return
       turns.add(turn)
 
-      agent.steer(userMessage(buildMaintenanceText({ game }), 'maintenance'))
+      const playerTurns = (playerTurnCounts.get(agent) ?? 0) + 1
+      playerTurnCounts.set(agent, playerTurns)
+      const interval = readSavePolicyInterval(game.dir) ?? config.consolidationInterval
+
+      if (playerTurns % interval === 0) {
+        agent.steer(userMessage(buildConsolidationText({ game, interval }), 'maintenance'))
+      } else {
+        agent.steer(userMessage(buildMaintenanceText({ game }), 'maintenance'))
+      }
     } catch (error) {
       logger.warn('turn-stopping World Core 收尾失败: %s', error?.message ?? error)
     }

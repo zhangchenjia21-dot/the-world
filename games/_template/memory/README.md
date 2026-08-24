@@ -4,6 +4,7 @@
 
 可按真实需要建立：
 
+- `DELTAS.md` — 固定存在：每回合 durable facts 的捕获缓冲，检查点归并后清空（两层维护的第一层）；
 - `recent.md` — 最近若干回合高密度摘要；
 - `long-term.md` — 已稳定的长期背景；
 - `retrieval-index.md` — 哪些主题应去哪里追溯；

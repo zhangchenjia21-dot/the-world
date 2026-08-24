@@ -19,7 +19,8 @@ export const GAME_MODE_SECTION_TEXT = `## The World — 游戏模式
 - GM / Source / System 知道 X，不等于 NPC 知道 X。NPC 的知识必须有世界内来源；没有来源就不知道。未来历史事实（世界包/史料中的"后来如何"）同样不是世界内知识；开放历史下，角色记忆里的史料是参考不是剧本。
 - library/ 是可复用 Source；games/<game-id>/ 是单局现实。绝不把单局演化反向写回 Source。
 - 只把未来仍需存在的 durable facts 写入 game workspace；路人不必建档，但产生长期关系、承诺、债务、伤情、关键情报或未解决后果后必须可恢复。Importance controls attention, not existence。
-- game workspace 里一个事实只有一个 Owner：state/CURRENT.md 只放恢复锚点（时间/位置/场景/当前选择）；玩家状态 → state/PLAYER.md；悬而未决 → state/THREADS.md（closed 归档 story/LEDGER.md）；人物 → state/characters/（实体只存一次，分类是 frontmatter 属性，INDEX.md 是派生视图可重建）；机制运行状态 → mechanics/<机制>/STATE.md（按需建档）；重要历史 → story/LEDGER.md；压缩记忆 → memory/RECENT.md。没有变化就不写任何文件。
+- game workspace 里一个事实只有一个 Owner：state/CURRENT.md 只放恢复锚点（时间/位置/场景/当前选择）；玩家状态 → state/PLAYER.md；悬而未决 → state/THREADS.md（closed 归档 story/LEDGER.md）；人物 → state/characters/（实体只存一次，分类是 frontmatter 属性，INDEX.md 是派生视图可重建）；机制运行状态 → mechanics/<机制>/STATE.md（按需建档）；重要历史 → story/LEDGER.md；压缩记忆 → memory/RECENT.md。
+- 持久维护分两层：每回合只把本轮新产生的 durable facts 追加 1–3 行到 memory/DELTAS.md（不逐 Owner 巡视、不重读重写旧文件）；归并到各 Owner 的批量工作在检查点（场景收束 / 时间大跳 / 每 N 玩家回合）统一执行。DELTAS.md 里的条目从写入起就是有效事实。没有 durable 变化就不写任何文件。
 
 ### DSH 原生选择交互（仅用于配置流程）
 New Game Setup 中有一组有限、明确的候选项需要玩家选择时，优先调用 DSH 的 \`ask_user_question\`，让 Web GUI 渲染可点击选项；不要仅在普通聊天正文里模拟 A/B/C 菜单。
@@ -140,7 +141,7 @@ export function buildSetupContinueText({ game }) {
   ].join('\n')
 }
 
-export function buildRecoveryInjection({ game, source, current, recent, composition }) {
+export function buildRecoveryInjection({ game, source, current, recent, composition, deltas }) {
   const lines = [
     '[The World 游戏恢复]',
     `你正在${source === 'startup' ? '一个全新的 Session 中' : '恢复的 Session 中'}继续「${game.id}」。不要要求玩家复述旧剧情。`,
@@ -162,6 +163,12 @@ export function buildRecoveryInjection({ game, source, current, recent, composit
     lines.push(recent.text.trim())
   }
 
+  if (deltas) {
+    lines.push('', `===== memory/DELTAS.md${deltas.truncated ? '（已截断）' : ''}（未归并的持久变化，自写入起即为有效事实）=====`)
+    lines.push(deltas.text.trim())
+    lines.push('', '- 上方未归并的 DELTAS 条目：把它们视为已经发生的事实纳入主持，并在第一个方便的场景收束点归并到各 Owner。')
+  }
+
   lines.push(
     '',
     `更多内容按需读取 ${game.dir}/state/PLAYER.md、state/THREADS.md、state/characters/、mechanics/、story/、memory/、saves/ 与 library/ Source。`,
@@ -174,10 +181,24 @@ export function buildRecoveryInjection({ game, source, current, recent, composit
 export function buildMaintenanceText({ game }) {
   return [
     `[World Core 回合维护 — 静默执行]（${game.id}）`,
-    '本轮叙事已经结束。只检查是否产生了未来仍需成立的 durable facts。不要继续剧情、不要推进时间，也不要调用 `ask_user_question`。',
-    '维护只更新文件，不替玩家做任何决定（Control mode 授权不变）。',
-    `有 durable change 时按 Owner 更新：当前场景锚点 → ${game.dir}/state/CURRENT.md；玩家状态 → state/PLAYER.md；承诺/后果/线索/债务 → state/THREADS.md（closed 线程归档 story/LEDGER.md）；人物 → state/characters/（新实体建档并刷新 INDEX.md）；机制数值 → mechanics/<机制>/STATE.md；值得长期追溯的事件 → story/LEDGER.md；必要时刷新 memory/RECENT.md。`,
-    '没有 durable change 就不要重写任何文件。',
+    '本轮叙事已经结束。只判断：本轮是否产生了未来仍需成立的 durable facts？用你主持本回合已有的上下文判断，不要为此重读任何文件。不要继续剧情、不要推进时间，也不要调用 `ask_user_question`。',
+    '维护只记录事实，不替玩家做任何决定（Control mode 授权不变）。',
+    '- 没有 durable change：不写任何文件，直接静默结束。',
+    `- 有 durable change：只做一件事——向 ${game.dir}/memory/DELTAS.md 追加 1–3 行（谁 / 什么 / 变成什么样，可附建议 Owner）。不建档、不刷新 INDEX、不改写其它文件。`,
+    '- 唯一例外：时间 / 位置 / 当前选择变化时，可直接小改 state/CURRENT.md 的锚点行。',
+    '- 如果本轮恰好收束了大场景或大幅推进时间，可以多走一步：把 DELTAS 归并到各 Owner（characters/、THREADS、LEDGER、mechanics、PLAYER）后清空已归并条目。',
     '完成维护后不要输出面向玩家的内容：不要输出任何自然语言、完成通知、文件清单或“本轮结束”等文字；直接静默结束 maintenance step。'
+  ].join('\n')
+}
+
+export function buildConsolidationText({ game, interval }) {
+  return [
+    `[World Core 检查点归并 — 静默执行]（${game.id}，约每 ${interval} 玩家回合）`,
+    '先做常规捕获：本轮若产生了新的 durable facts，先向 memory/DELTAS.md 追加 1–3 行。',
+    `然后执行归并：读取 ${game.dir}/memory/DELTAS.md 全部未归并条目，逐条写回正确 Owner：`,
+    '- 当前场景锚点 → state/CURRENT.md；玩家状态 → state/PLAYER.md；承诺 / 后果 / 线索 / 债务 → state/THREADS.md（closed 线程归档 story/LEDGER.md）；人物 → state/characters/（新实体建档并刷新 INDEX.md）；机制数值 → mechanics/<机制>/STATE.md；值得长期追溯的事件 → story/LEDGER.md。',
+    '- 归并完成后从 DELTAS.md 移除已归并条目，并刷新 memory/RECENT.md 摘要。',
+    '- 若本局存档策略到达存档回合，先完成归并再做存档快照。',
+    '归并只搬运与落实已发生的事实，不新编剧情，不替玩家做任何决定。完成后静默结束，不输出任何面向玩家的文字。'
   ].join('\n')
 }

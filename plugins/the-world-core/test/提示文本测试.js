@@ -10,7 +10,8 @@ import {
   buildDynamicContext,
   buildRecoveryInjection,
   buildNoGameInjection,
-  buildMaintenanceText
+  buildMaintenanceText,
+  buildConsolidationText
 } from '../lib/提示文本.js'
 
 const 游戏 = { id: 'three-kingdoms_001', dir: 'D:/games/three-kingdoms_001' }
@@ -32,8 +33,12 @@ test('稳定 section 承载全部长期语义（Gap 02/03/05/06 + 工作区 Owne
   assert.match(s, /memory\/RECENT\.md/)
   // Source 边界
   assert.match(s, /绝不把单局演化反向写回 Source/)
+  // 两层维护：每回合 delta 捕获 + 检查点归并
+  assert.match(s, /memory\/DELTAS\.md/)
+  assert.match(s, /检查点/)
+  assert.match(s, /从写入起就是有效事实/)
   // 写纪律（A6）
-  assert.match(s, /没有变化就不写任何文件/)
+  assert.match(s, /没有 durable 变化就不写任何文件/)
 })
 
 test('三种操控模式语义互不相同且都包含“有意义的选择点”纪律', () => {
@@ -89,13 +94,60 @@ test('恢复注入：CURRENT.md 缺失时引导重建而不是失败', () => {
   assert.match(text, /重建/)
 })
 
-test('维护提醒：只检查 durable changes、无变化不写文件、不继续剧情', () => {
+test('恢复注入：未归并的 DELTAS 作为有效事实一并注入', () => {
+  const text = buildRecoveryInjection({
+    game: 游戏,
+    source: 'startup',
+    current: { text: '# Current Game State\n- 主角在许昌', truncated: false },
+    recent: null,
+    deltas: { text: '## 待归并\n- 张辽 对主角 好感上升（建议 Owner: state/characters/张辽.md）', truncated: false }
+  })
+  assert.match(text, /memory\/DELTAS\.md/)
+  assert.match(text, /自写入起即为有效事实/)
+  assert.match(text, /张辽 对主角 好感上升/)
+  assert.match(text, /视为已经发生的事实纳入主持/)
+  assert.match(text, /归并到各 Owner/)
+})
+
+test('恢复注入：没有 DELTAS 时不出现 DELTAS 区块', () => {
+  const text = buildRecoveryInjection({
+    game: 游戏,
+    source: 'startup',
+    current: { text: '# Current Game State', truncated: false },
+    recent: null,
+    deltas: null
+  })
+  assert.doesNotMatch(text, /DELTAS/)
+})
+
+test('维护提醒（Tier 1 delta 捕获）：只追加 DELTAS、无变化不写文件、不继续剧情', () => {
   const text = buildMaintenanceText({ game: 游戏 })
+  assert.match(text, /回合维护/)
   assert.match(text, /durable facts/)
-  assert.match(text, /没有 durable change 就不要重写任何文件/)
+  assert.match(text, /没有 durable change：不写任何文件/)
+  assert.match(text, /memory\/DELTAS\.md 追加 1–3 行/)
+  assert.match(text, /不要为此重读任何文件/)
+  assert.match(text, /不建档、不刷新 INDEX、不改写其它文件/)
   assert.match(text, /不要继续剧情/)
   assert.match(text, /不要输出面向玩家的内容/)
   assert.match(text, /Control mode/)
+  assert.match(text, /three-kingdoms_001/)
+})
+
+test('检查点归并（Tier 2）：先捕获再归并到各 Owner，归并后清空 DELTAS，存档前完成', () => {
+  const text = buildConsolidationText({ game: 游戏, interval: 5 })
+  assert.match(text, /检查点归并/)
+  assert.match(text, /每 5 玩家回合/)
+  assert.match(text, /memory\/DELTAS\.md 追加 1–3 行/)
+  assert.match(text, /逐条写回正确 Owner/)
+  assert.match(text, /state\/THREADS\.md/)
+  assert.match(text, /state\/characters\//)
+  assert.match(text, /mechanics\/<机制>\/STATE\.md/)
+  assert.match(text, /story\/LEDGER\.md/)
+  assert.match(text, /移除已归并条目/)
+  assert.match(text, /存档快照/)
+  assert.match(text, /不替玩家做任何决定/)
+  assert.match(text, /静默结束/)
   assert.match(text, /three-kingdoms_001/)
 })
 

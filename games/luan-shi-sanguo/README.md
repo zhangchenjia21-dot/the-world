@@ -10,5 +10,5 @@
 - `state/` 当前现实——CURRENT.md（恢复锚点）· PLAYER.md（玩家状态）· THREADS.md（悬而未决）· characters/（人物实体+INDEX）
 - `mechanics/` 本局机制运行状态（启用清单与各机制 STATE）
 - `story/` 重要历史（LEDGER）
-- `memory/` 压缩记忆
+- `memory/` 压缩记忆 + DELTAS.md（待归并的持久变化缓冲，自写入起即为有效事实）
 - `saves/` 恢复点（政策见 COMPOSITION.md）

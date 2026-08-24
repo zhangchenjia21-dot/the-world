@@ -1,7 +1,7 @@
 # the-world-core｜The World TW-01 Minimal World Core
 
 DSH 原生 RPG 游戏模式插件。让已经会当 GM 的模型，长期稳定履行游戏后台职责：
-游戏恢复、durable 维护协调、认知边界、操控粒度、节奏弹性。
+游戏恢复、两层 durable 维护协调（delta 捕获 + 检查点归并）、认知边界、操控粒度、节奏弹性。
 
 不是完整 RPG Runtime。Brief 明确 Non-goal 的能力（ECS / 实体数据库 / typed mutation /
 审批门 / 知识 ACL / 台词校验器等）一概不建。
@@ -26,6 +26,7 @@ DSH 原生 RPG 游戏模式插件。让已经会当 GM 的模型，长期稳定�
     templateDir: games/_template # 新游戏模板（仅用于提示文案）
     maxFileChars: 12000          # 恢复注入单文件内联上限，超出截断
     maintenance: true            # 回合维护提醒总开关（对照实验时可关）
+    consolidationInterval: 10    # 检查点归并节奏（玩家回合）；本局有自动存档策略时跟随其间隔
 ```
 
 源码改动后无需重启：preset 组合在每次创建会话时重新读取；进行中的会话保持创建时的组合。
@@ -62,9 +63,18 @@ games/<game-id>/
 ├─ README.md          # 身份 + 恢复阅读顺序
 ├─ state/CURRENT.md   # 现在真实是什么（第一 canonical 入口；含 Control mode 行）
 ├─ story/LEDGER.md    # 未来值得追溯的重要事件
+├─ memory/DELTAS.md   # 待归并缓冲：每回合 durable facts 追加处（自写入起即为有效事实）
 ├─ memory/RECENT.md   # 恢复用压缩层（可重写；冲突时以 state 为准）
 └─ saves/             # 明确恢复点
 ```
+
+后台维护分两层（Game Workspace Architecture v0.2 §2.8）：
+
+- **Tier 1 delta 捕获（每回合）**：只向 `memory/DELTAS.md` 追加 1–3 行本轮新产生的 durable facts，
+  不重读旧文件、不逐 Owner 巡视；
+- **Tier 2 检查点归并**：场景收束 / 时间大跳 / 每 N 玩家回合（N 取 COMPOSITION.md 自动存档间隔，
+  手动存档时回落 `consolidationInterval`）把 DELTAS 逐条写回正确 Owner 并清空已归并条目；
+  到达存档回合时先归并再做存档快照。
 
 程序只从 CURRENT.md 提取三个字段（均为 `- 字段: 值` 行，缺失即省略/回落默认）：
 
@@ -78,8 +88,8 @@ games/<game-id>/
 | --- | --- |
 | `ctx.systemPrompt.section()` | 稳定游戏模式语义（order 40，persona 之后） |
 | `ctx.systemPrompt.context()` | 每轮动态上下文：game id / 操控模式 / 时间位置 / 认知边界提醒 |
-| `agent/session-start` + `Agent.inject()` | 新会话恢复注入（startup/resume/clear/compact 均注入） |
-| `agent/turn-stopping` + `Agent.steer()` | 回合结束维护提醒；同一 turn 去重，无无限循环 |
+| `agent/session-start` + `Agent.inject()` | 新会话恢复注入（startup/resume/clear/compact 均注入；含未归并 DELTAS） |
+| `agent/turn-stopping` + `Agent.steer()` | 回合结束维护提醒：普通回合 delta 捕获、间隔回合检查点归并；同一 turn 去重，无无限循环 |
 | scoped plugin lifecycle（agent preset 挂载） | preset standing scope 注册一次，覆盖所有加入会话 |
 
 未采用：`Agent.runMaintenance()`（维护需延续本轮叙事上下文，turn 内 steer 更贴切）、
@@ -88,7 +98,7 @@ games/<game-id>/
 ## 测试与冒烟
 
 ```powershell
-# focused tests（26 个，node:test；沙箱下需逐文件进程内运行）
+# focused tests（35 个，node:test；沙箱下需逐文件进程内运行）
 cd plugins/the-world-core
 node test/游戏定位测试.js; node test/提示文本测试.js; node test/事件接线冒烟测试.js
 
@@ -114,3 +124,5 @@ node plugins/the-world-core/scripts/验证挂载.mjs   # 期望输出 THE_WORLD_
 6. **认知边界是提示语义而非程序强制**：未实现每条知识 ACL / 台词 validator（Brief 明确 Non-goal）。
 7. **`node --test test/` 目录模式在 DSH 文件沙箱下因子进程管道 EPERM 失败**：逐文件运行即可；
    非沙箱环境两种方式均可用。
+8. **归并节奏计数器随 Session 生命周期**：跨 Session 不保证精确的每 N 回合——`memory/DELTAS.md`
+   本身是持久事实源（条目自写入起有效），归并早一点晚一点都不丢事实。

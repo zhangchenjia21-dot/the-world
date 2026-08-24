@@ -54,6 +54,7 @@ games/<game-id>/
 ├─ story/
 │  └─ LEDGER.md
 ├─ memory/
+│  ├─ DELTAS.md            # Core（待归并缓冲）
 │  └─ RECENT.md
 └─ saves/
    ├─ README.md
@@ -128,6 +129,13 @@ World Pack 是世界原始 Source；WORLD.md 是「这一局已经变成什么�
 
 职责不变：story/ 回答「发生过哪些未来值得追溯的事」（LEDGER + 归档的 closed 线程）；memory/ 回答「下一次高质量主持最值得恢复什么」。两者都不替代 state/ 的 current truth。
 
+memory/ 下有两个固定文件，对应后台维护的两层：
+
+- `memory/DELTAS.md` — **Tier 1 捕获缓冲**：每回合后台维护只把本轮新产生的 durable facts 追加 1–3 行（谁 / 什么 / 变成什么样，可附建议 Owner），不逐 Owner 巡视、不重读重写旧文件。**条目自写入起即为有效事实**，恢复注入与存档都不得忽略；
+- `memory/RECENT.md` — 压缩记忆，在 **Tier 2 检查点归并**时刷新：归并发生在场景收束 / 时间大跳 / 每 N 玩家回合（N 跟随 COMPOSITION.md 的自动存档间隔，无自动存档时由 World Core 默认节奏兜底），把 DELTAS 逐条写回正确 Owner 后移除已归并条目。
+
+拆分理由：归并可延迟，捕获不可延迟——同回合捕获保证崩溃安全（写下的就是事实），批量归并保证每回合维护足够轻。
+
 ## 3. Saves：Persistent State ≠ Save Point
 
 - **Persistent State**：世界实时保持真实，由后台 maintenance 持续维护（state/、mechanics/、story/、memory/），**与存档策略无关**。即使玩家选择永远手动存档，后台维护照常发生。
@@ -142,6 +150,7 @@ Setup 顺序：世界 → 拓展包 → 世界起点 → 玩家角色 → 操控
 配套规则：
 
 - **player turn = 一次玩家输入 → 一次 GM 正常回复**；后台 maintenance step 不计回合；
+- **归并先于存档**：到达自动存档回合时，先把 memory/DELTAS.md 归并到各 Owner，再做存档快照（快照里不应残留大量未归并缓冲）；
 - **里程碑兜底**：重大阶段切换（THREADS 大批量结算、势力归属变化、主角身份跃迁）时，无论回合计数都自动建立存档；
 - 自动存档保留最近 5 个，超出滚动删除；**手动 SAVE 永不自动删除**。
 
@@ -186,6 +195,6 @@ UI 插件读 frontmatter 与 INDEX，不解析叙事正文；约定（路径稳�
 2. npcs/ → characters/ 时**全仓重写链接**（CURRENT/LEDGER/README 等所有引用）；
 3. 旧 CURRENT.md 按 Owner 拆分：场景锚点留下，玩家状态 → PLAYER.md，未解决后果 → THREADS.md（分 open/closed，closed 归 LEDGER），系统状态 → mechanics/traveler-system/STATE.md；
 4. WORLD.md 不强行建立——世界态势第一次偏离 Source 时才建；
-5. 后台 maintenance 自此按 Owner 更新对应文档，不再一股脑写 CURRENT。
+5. 后台 maintenance 分两层执行：每回合只做 Tier 1 delta 捕获（追加 memory/DELTAS.md），Tier 2 检查点归并时才按 Owner 批量写回对应文档——既不再一股脑写 CURRENT，也不再每回合逐 Owner 巡视。
 
 首个迁移实例：`games/luan-shi-sanguo`（2026-08-24，归档快照 SAVE-01）。

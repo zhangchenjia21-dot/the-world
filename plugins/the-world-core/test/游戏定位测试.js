@@ -13,6 +13,7 @@ import {
   readBounded,
   parseCurrentFields,
   normalizeControlMode,
+  readSavePolicyInterval,
   DEFAULT_CONTROL_MODE
 } from '../lib/游戏定位.js'
 
@@ -125,4 +126,37 @@ test('normalizeControlMode：别名与中文归一，未知值回落默认', () 
 test('parseCurrentFields：接受中文「操控模式」行', () => {
   const fields = parseCurrentFields('- 操控模式: 完全控制\n')
   assert.equal(fields.controlMode, 'full-control')
+})
+
+test('readSavePolicyInterval：从 COMPOSITION.md 解析「每 N 玩家回合」', () => {
+  const root = 建临时目录()
+  const gameDir = 建游戏(root, 'save-policy')
+  fs.writeFileSync(path.join(gameDir, 'COMPOSITION.md'), [
+    '# Game Composition',
+    '- 确认状态: confirmed',
+    '- 策略: **每 5 玩家回合自动存档**'
+  ].join('\n'))
+  assert.equal(readSavePolicyInterval(gameDir), 5)
+})
+
+test('readSavePolicyInterval：兼容「每 N 个玩家回合」写法', () => {
+  const root = 建临时目录()
+  const gameDir = 建游戏(root, 'save-policy-ge')
+  fs.writeFileSync(path.join(gameDir, 'COMPOSITION.md'), '- 每 10 个玩家回合自动存档\n')
+  assert.equal(readSavePolicyInterval(gameDir), 10)
+})
+
+test('readSavePolicyInterval：手动存档 / 文件缺失 / 非法数字都返回 null', () => {
+  const root = 建临时目录()
+  const gameDir = 建游戏(root, 'save-policy-manual')
+  fs.writeFileSync(path.join(gameDir, 'COMPOSITION.md'), '- 策略: 手动存档\n')
+  assert.equal(readSavePolicyInterval(gameDir), null)
+
+  // 没有 COMPOSITION.md
+  const bare = 建游戏(root, 'save-policy-none')
+  assert.equal(readSavePolicyInterval(bare), null)
+
+  // 0 与负数不是有效间隔
+  fs.writeFileSync(path.join(gameDir, 'COMPOSITION.md'), '- 每 0 玩家回合自动存档\n')
+  assert.equal(readSavePolicyInterval(gameDir), null)
 })
