@@ -82,6 +82,7 @@ World Core 是**薄职责层**。
 当前 Required Behaviors：
 
 - game entry / continue / fresh-session recovery；
+- player-confirmed game composition：新局的 World / Player Character / Expansion / Control Mode 由玩家确认并固化为 game 配置，Optional expansion 不得由 Agent 静默启用；
 - bounded GM / world / workspace context；
 - durable maintenance responsibility 不随长局消失；
 - dynamic durable entity / relationship / commitment / consequence 写回；

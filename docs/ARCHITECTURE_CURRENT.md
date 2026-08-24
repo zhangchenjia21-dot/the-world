@@ -60,6 +60,7 @@ TW-00.5 Bare DSH Probe 已结束。实验最终证明：
 
 - World Core RPG Game Mode；
 - game entry / continue / recovery semantics；
+- player-confirmed game composition（新局组合确认与固化）；
 - persistent world workspace conventions；
 - durable maintenance discipline；
 - dynamic durable identity semantics；
@@ -81,6 +82,9 @@ library/
 
 plugins/
 → World Core + RPG Experience / Mechanics Plugins
+
+games/<game-id>/COMPOSITION.md
+→ player-confirmed game composition（World / Player Character / Expansion / Control Mode），本局 canonical 配置
 
 games/<game-id>/state/
 → current game-local canonical reality
@@ -112,6 +116,8 @@ World Core 是 TW-01 Shared Foundation。
 World Core 应能在 Session 开始时：
 
 - 确认当前 game；
+- 新 game：先执行 Game Composition 确认（World / Player Character / Expansion / Control Mode），未确认完成不进入正式叙事；
+- 旧 game：读取玩家已确认的本局组合配置，继续使用而不是重新决定；
 - 找到恢复入口；
 - 读取最小 current state；
 - 按需读取 unresolved story / recent memory；

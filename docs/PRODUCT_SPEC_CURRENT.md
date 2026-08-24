@@ -362,7 +362,8 @@ TW-01 当前目标：
 7. minimal pacing semantics；
 8. fresh-session recovery；
 9. Source 与 game-local reality 分离；
-10. 为后续 UI / Map / Mechanics 保留清晰 Owner。
+10. 为后续 UI / Map / Mechanics 保留清晰 Owner；
+11. player-confirmed Game Composition：新局的 World / Player Character / Expansion / Control Mode 由玩家确认，Optional expansion 不得由 Agent 静默启用，确认组合固化为 game 配置并跨 Session 恢复。
 
 详细计划：`docs/TW-01_WORLD_CORE_PLAN.md`。
 
@@ -457,6 +458,7 @@ TW-01 不直接把 Bare DSH `TEST/save/` 的偶然目录结构提升为正式架
 - **DEC-P15** Knowledge Provenance：GM / Source / System knows X != NPC knows X。
 - **DEC-P16** Pacing Elasticity：World Loop 与 Life Loop 同时存在，不用事件持续轰炸替代玩家生活。
 - **DEC-P17** Persistence Maintenance Discipline：durable maintenance 是 World Core 稳定职责，不能随长局衰减消失。
+- **DEC-P18** Game Composition = Player-Confirmed：新局组合（World / Player Character / Expansion / Control Mode）必须经玩家确认；世界包可带 Required / Recommended 内容，Optional expansion 默认关闭且只能由玩家明确启用；确认结果固化为 game 配置（`games/<game-id>/COMPOSITION.md`），Session 恢复继续使用；Source NPC / lore 等世界内部资产不要求逐项选择；组合确认完成前不进入正式叙事。
 
 ---
 

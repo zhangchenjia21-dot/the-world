@@ -23,6 +23,20 @@ Bare DSH Probe 最终把 World Core 的真实职责收敛到：
 - 在全新 DSH Session 恢复同一个世界；
 - 只组装当前必要 context。
 
+### New Game Setup / Game Composition
+
+新局组合由玩家确认，不由 Agent 静默决定：
+
+- 玩家至少确认 **World / Player Character / Expansion-Mechanics / Protagonist Control Mode** 后才进入正式叙事；
+- 世界包内容分级：**Required** 随世界生效并明示；**Recommended** 默认预选、可取消；**Optional** 默认关闭，必须玩家明确启用；
+- 确认结果固化为 `games/<game-id>/COMPOSITION.md`，是 game-local canonical 配置，Session 恢复继续使用；
+- 局内变更组合是玩家可感知的正式修改，写回 COMPOSITION；
+- Source NPC / lore 等世界内部资产不要求逐项选择。
+
+```text
+Asset Library（可用）!= Game Composition（本局启用）!= Runtime Relevant（当前相关）
+```
+
 ### Durable Maintenance Discipline
 
 Bare DSH 在长局后会逐渐停止修改游戏文件，因此 World Core 必须稳定承担：

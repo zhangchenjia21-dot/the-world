@@ -131,11 +131,53 @@ Life Loop
 从完全没有旧聊天上下文的新 DSH Session 启动时，World Core 应能：
 
 - 找到 game；
+- 读取本局 Composition 配置（见 WC-08），继续使用已确认组合而不是重新询问或重新决定；
 - 读取 current state；
 - 读取必要 unresolved story / memory；
 - 按需读取 Source；
 - 恢复当前地点、人物关系、承诺、局势和玩家控制模式；
 - 继续游戏而不是重新开局。
+
+### WC-08｜New Game Setup / Game Composition
+
+新开一局时，World Core 必须提供 **Game Composition** 流程。正式语义：
+
+> **Agent 不得静默决定本局启用哪些可选拓展包。**
+
+玩家在正式进入游戏叙事前，至少确认：
+
+1. **World**：本局使用哪个世界包；
+2. **Player Character**：使用哪张人物卡 / 原创主角；
+3. **Expansion / Mechanics**：本局启用哪些拓展包 / 机制模块；
+4. **Protagonist Control Mode**：Full / Light / Narrative Delegation（见 WC-05）。
+
+世界包 / 资产可以声明内容分级：
+
+- **Required**：世界定义的必要组成部分，随世界包生效，向玩家明示但不需要逐项选择；
+- **Recommended**：世界作者推荐项，作为玩家确认时的默认预选，玩家可取消；
+- **Optional**：默认不启用，**必须经玩家明确选择**；Agent 推荐可以，代替玩家勾选不行。
+
+边界：
+
+- Source NPC / lore / 其它世界内部资产不要求玩家逐项选择；Game Composition 是**包 / 模块级**确认，不是资产级清点；
+- 玩家确认后的最终组合固化为本 game 的正式配置（`games/<game-id>/COMPOSITION.md`），是 game-local canonical 事实，不是 UI preference；
+- 后续 Session 恢复（WC-07）继续使用该配置，不因换 Session 而丢失或重置；
+- 局内变更组合（启用 / 停用拓展）是一次玩家可感知的正式修改，写回 COMPOSITION，不允许 Agent 静默执行；
+- **Composition 未确认完成前，不进入正式游戏叙事。**
+
+形式化层级：
+
+```text
+Asset Library（已安装 / 可用）
+!= Game Composition（本局启用组合）
+!= Current Runtime Relevant（当前相关）
+```
+
+**Enabled != Installed**；启用集合来自玩家确认，不来自 Agent 默认。
+
+实现（v0.1）：DSH 插件 `the-world-core`——开局向导为提示语义（模型用 ask_user_question 逐项确认），
+程序化确认门只有一处：session-start 检测 `COMPOSITION.md` 的「确认状态」，
+未确认的游戏目录走“补完确认”注入而不是正常恢复（`readCompositionStatus`）。
 
 ---
 
@@ -161,6 +203,7 @@ games/<game-id>/
 ```text
 games/<game-id>/
 ├─ README.md
+├─ COMPOSITION.md      ← WC-08：玩家确认的本局组合配置（canonical）
 ├─ state/
 │  └─ CURRENT.md
 ├─ story/
@@ -191,7 +234,9 @@ games/<game-id>/
 ```text
 [Session / Turn Start]
 World Core
-→ 确认 game + control mode
+→ 确认 game + composition + control mode
+→ 新 game：先完成 WC-08 Game Composition 确认，未确认不进入叙事
+→ 旧 game：按已确认 COMPOSITION 恢复，不重新决定启用组合
 → 注入少量 GM / world / knowledge-boundary semantics
 → 提供恢复入口
 
