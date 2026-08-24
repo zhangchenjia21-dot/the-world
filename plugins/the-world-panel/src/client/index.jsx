@@ -4,10 +4,17 @@
  * 职责：
  * - registerTab 注册「世界」tab（single 实例）；
  * - 启动与会话切换时探测当前会话：是 the-world preset 且 cwd 解析出 game → openTab 顶入视野；
- * - 面板组件按四分页渲染 Node 半投影；刷新由 SSE（fs.watch 驱动）触发，无定时轮询。
+ * - 面板组件按分页渲染 Node 半投影；刷新由 SSE（fs.watch 驱动）触发，无定时轮询。
  *
  * UI 是 game truth 的投影（DEC-B3）：解析层只重组既有 Markdown 的版式，
  * 不增删内容、不产生第二事实源、无任何编辑入口。
+ *
+ * 分页语义（v0.2，按真实文件结构归纳，不硬编码具体游戏）：
+ * - 角色：PLAYER.md 全卷，但「装备 / 携带物」类分节移交物品页；
+ * - 人物：state/characters/ 名册；
+ * - 物品：PLAYER.md 装备类分节 + 机制 STATE.md 中「空间 / 仓库 / 背包」类分节；
+ * - 系统：机制 STATE.md 其余分节（剔除任务类与仓库类）；无机制时分页隐藏（并非所有世界都带系统）；
+ * - 任务：THREADS.md 世界线程（紧急 → 普通 → 长期排序）+ 机制「任务 / 委托」类分节（系统任务组）。
  *
  * 降级：inject 声明 betterSidebar——宿主缺失时本 fiber 永久等待（不报错、不崩 DSH），
  * 面板功能静默缺席（AC-7）。
@@ -58,7 +65,7 @@ function sectionsOf(text) {
   return { preamble, sections }
 }
 
-/** 抽取 bullets 正文（去掉引用行与空行后的条目列表）；无条目时返回 null。 */
+/** 抽取 bullets 正文；无条目时返回 null。 */
 function bulletsOf(text) {
   const items = []
   for (const line of text.split(/\r?\n/)) {
@@ -66,6 +73,28 @@ function bulletsOf(text) {
     if (m) items.push(m[1].trim())
   }
   return items.length ? items : null
+}
+
+/** 分节归类词表：按节名把机制分节分流到物品页 / 任务页（通用词，不绑定具体游戏）。 */
+const INVENTORY_SECTION = /装备|携带|物品|背包|行囊|空间|仓库|储物/
+const QUEST_SECTION = /任务|委托|合同/
+
+/** 机制拆分：任务类与仓库类分节流出，其余留在系统页。 */
+function splitMechanics(mechanics) {
+  const inventory = []
+  const quests = []
+  const systems = []
+  for (const m of mechanics) {
+    const { preamble, sections } = sectionsOf(m.text ?? '')
+    const keep = []
+    for (const s of sections) {
+      if (QUEST_SECTION.test(s.title)) quests.push({ mech: m.id, section: s })
+      else if (INVENTORY_SECTION.test(s.title)) inventory.push({ mech: m.id, section: s })
+      else keep.push(s)
+    }
+    systems.push({ id: m.id, preamble, sections: keep })
+  }
+  return { inventory, quests, systems }
 }
 
 /** THREADS.md 的 ### T-xx｜标题 条目 → quest 卡；解析不出结构时返回 null 走通用渲染。 */
@@ -87,6 +116,25 @@ function parseQuests(text) {
   return quests.length ? quests : null
 }
 
+/** 世界线程排序：紧急 → 普通 → 长期；同级按 id 稳定。 */
+function questRank(quest) {
+  const status = quest.fields['状态'] ?? ''
+  if (/紧急|紧迫|倒计时/.test(status)) return 0
+  if (/长期/.test(status)) return 2
+  return 1
+}
+
+function sortQuests(quests) {
+  return [...quests].sort((a, b) => questRank(a) - questRank(b) || a.id.localeCompare(b.id))
+}
+
+/** 系统任务条目（机制「任务」节的一条 bullet）：「…」为题，余文为注。 */
+function parseSystemQuest(bullet) {
+  const m = /^「([^」]+)」\s*[——\-–]*\s*(.*)$/.exec(bullet)
+  const done = /已完成|已关闭|已办结/.test(bullet)
+  return m ? { title: m[1], note: m[2], done } : { title: bullet, note: '', done }
+}
+
 /** 从角色卡正文标题行（# 乱世三国｜玩家角色：张宸嘉）提取显示名。 */
 function displayNameOf(docBody, fallback) {
   const m = /^#\s+.+?[:：]\s*(.+)$/m.exec(docBody)
@@ -104,7 +152,7 @@ function renderInline(text, keyPrefix) {
   })
 }
 
-/** 通用 Markdown 体渲染：引用注记 / 列表 / 标题 / 分隔线。 */
+/** 通用 Markdown 体渲染：引用注记 / 列表 / 标题 / 段落。 */
 function Markdown({ text }) {
   if (!text) return h('div', { className: 'twp-empty' }, '（空）')
   const lines = text.split(/\r?\n/)
@@ -129,10 +177,8 @@ function Markdown({ text }) {
       out.push(h('div', { key, className: 'twp-md-h' }, renderInline(heading[2], key)))
     } else if (quote) {
       out.push(h('div', { key, className: 'twp-md-quote' }, renderInline(quote[1], key)))
-    } else if (/^\s*---+\s*$/.test(line)) {
-      // 分隔线在卡片版式里省略
-    } else if (line.trim() === '') {
-      // 卡片间距由 CSS 控制
+    } else if (/^\s*---+\s*$/.test(line) || line.trim() === '') {
+      // 分隔线与空行：卡片版式里由 CSS 间距承担
     } else {
       out.push(h('p', { key, className: 'twp-md-p' }, renderInline(line, key)))
     }
@@ -153,12 +199,18 @@ function MetaChips({ meta, omitKeys = [] }) {
 }
 
 /** 分节面板：小篆风标题 + 条目列表。 */
-function SectionCard({ title, text }) {
+function SectionCard({ title, text, badge }) {
   const bullets = bulletsOf(text)
   return h(
     'section',
     { className: 'twp-card' },
-    h('header', { className: 'twp-card-h' }, h('span', { className: 'twp-card-seal' }, '❖'), title),
+    h(
+      'header',
+      { className: 'twp-card-h' },
+      h('span', { className: 'twp-card-seal' }, '❖'),
+      title,
+      badge ? h('span', { className: 'twp-badge plain' }, badge) : null
+    ),
     bullets
       ? h('ul', { className: 'twp-list' }, bullets.map((item, i) => h('li', { key: i }, renderInline(item, `b${i}`))))
       : h(Markdown, { text })
@@ -178,7 +230,7 @@ function Preamble({ text }) {
   )
 }
 
-/** 角色页：人物卡（画轴眉 + 名讳 + 元信息签）+ 各分节面板。 */
+/** 角色页：人物卡（画轴眉 + 名讳 + 元信息签）+ 各分节面板（装备类移交物品页）。 */
 function PlayerSheet({ text }) {
   const { meta, body } = splitDoc(text)
   const { preamble, sections } = sectionsOf(body)
@@ -198,7 +250,7 @@ function PlayerSheet({ text }) {
       )
     ),
     h(Preamble, { text: preamble }),
-    sections.map((s) => h(SectionCard, { key: s.title, title: s.title, text: s.text }))
+    sections.filter((s) => !INVENTORY_SECTION.test(s.title)).map((s) => h(SectionCard, { key: s.title, title: s.title, text: s.text }))
   )
 }
 
@@ -225,19 +277,33 @@ function NpcCard({ id, text }) {
   )
 }
 
-/** 物品 / 系统页：机制卡。 */
-function MechanicCard({ id, text, defaultOpen }) {
-  const { preamble, sections } = sectionsOf(text)
+/** 物品页：玩家装备类分节 + 机制仓库类分节（带来源徽记）。 */
+function InventoryPanel({ playerText, mechanicInventory }) {
+  const playerSections = sectionsOf(splitDoc(playerText ?? '').body).sections.filter((s) => INVENTORY_SECTION.test(s.title))
+  const empty = playerSections.length === 0 && mechanicInventory.length === 0
+  if (empty) return h('div', { className: 'twp-empty' }, '（行囊空空）')
   return h(
-    'details',
-    { className: 'twp-card twp-mech', open: defaultOpen },
-    h('summary', null, h('span', { className: 'twp-card-seal' }, '⚙'), h('span', { className: 'twp-npc-name' }, id)),
-    h(Preamble, { text: preamble }),
-    sections.map((s) => h(SectionCard, { key: s.title, title: s.title, text: s.text }))
+    'div',
+    null,
+    playerSections.map((s) => h(SectionCard, { key: `p:${s.title}`, title: s.title, text: s.text })),
+    mechanicInventory.map(({ mech, section }) =>
+      h(SectionCard, { key: `m:${mech}:${section.title}`, title: section.title, text: section.text, badge: mech })
+    )
   )
 }
 
-/** 任务页：quest log。状态 → 徽章色调。 */
+/** 系统页：机制卡（任务类与仓库类分节已流出）。 */
+function MechanicCard({ mech, defaultOpen }) {
+  return h(
+    'details',
+    { className: 'twp-card twp-mech', open: defaultOpen },
+    h('summary', null, h('span', { className: 'twp-card-seal' }, '⚙'), h('span', { className: 'twp-npc-name' }, mech.id)),
+    h(Preamble, { text: mech.preamble }),
+    mech.sections.map((s) => h(SectionCard, { key: s.title, title: s.title, text: s.text }))
+  )
+}
+
+/** 任务页：世界线程（排序 + 状态徽章）+ 系统任务组。 */
 function questTone(status) {
   if (!status) return ''
   if (/紧急|紧迫|倒计时/.test(status)) return 'urgent'
@@ -268,14 +334,55 @@ function QuestCard({ quest }) {
   )
 }
 
-/** ── 四分页 ─────────────────────────────────────────────────────────────── */
+function SystemQuestRow({ bullet, mech }) {
+  const q = parseSystemQuest(bullet)
+  return h(
+    'div',
+    { className: `twp-sysq${q.done ? ' done' : ''}` },
+    h('span', { className: 'twp-sysq-mark' }, q.done ? '✓' : '◇'),
+    h('span', { className: 'twp-sysq-title' }, q.title),
+    q.note ? h('span', { className: 'twp-sysq-note' }, renderInline(q.note, q.title)) : null,
+    h('span', { className: 'twp-badge plain' }, mech)
+  )
+}
 
-const SUBTABS = [
-  { id: 'player', label: '角色' },
-  { id: 'characters', label: '人物' },
-  { id: 'mechanics', label: '物品 / 系统' },
-  { id: 'threads', label: '任务' }
-]
+function QuestPanel({ threadsText, mechanicQuests }) {
+  const worldQuests = parseQuests(threadsText)
+  const systemBullets = mechanicQuests.flatMap(({ mech, section }) =>
+    (bulletsOf(section.text) ?? []).map((bullet) => ({ mech, bullet }))
+  )
+  // 系统任务：未完成在前，已完成沉底
+  const sortedSystem = [...systemBullets].sort((a, b) => Number(parseSystemQuest(a.bullet).done) - Number(parseSystemQuest(b.bullet).done))
+  if (!worldQuests && sortedSystem.length === 0) {
+    return h('div', { className: 'twp-empty' }, '（当前没有悬而未决的事）')
+  }
+  return h(
+    'div',
+    null,
+    worldQuests
+      ? h(
+          'div',
+          null,
+          h('div', { className: 'twp-group-h' }, '世界线程'),
+          sortQuests(worldQuests).map((q, i) => h(QuestCard, { key: q.id || i, quest: q }))
+        )
+      : h(Markdown, { text: threadsText }),
+    sortedSystem.length
+      ? h(
+          'div',
+          null,
+          h('div', { className: 'twp-group-h' }, '系统任务'),
+          h(
+            'section',
+            { className: 'twp-card' },
+            sortedSystem.map(({ mech, bullet }, i) => h(SystemQuestRow, { key: `${mech}:${i}`, bullet, mech }))
+          )
+        )
+      : null
+  )
+}
+
+/** ── 分页骨架 ─────────────────────────────────────────────────────────────── */
 
 function formatTime(ms) {
   if (!ms) return ''
@@ -289,28 +396,41 @@ function PanelBody({ data }) {
   if (!data?.game) {
     return h('div', { className: 'twp-idle' }, '当前会话不是已确认的 The World 游戏局（或工作目录不在游戏工作区）。')
   }
+
+  const { inventory, quests, systems } = splitMechanics(data.mechanics ?? [])
+  const hasMechanics = (data.mechanics ?? []).length > 0
+
+  const tabs = [
+    { id: 'player', label: '角色' },
+    { id: 'characters', label: '人物' },
+    { id: 'inventory', label: '物品' },
+    ...(hasMechanics ? [{ id: 'mechanics', label: '系统' }] : []),
+    { id: 'threads', label: '任务' }
+  ]
+  const active = tabs.some((t) => t.id === sub) ? sub : 'player'
+
   let content = null
-  if (sub === 'player') {
+  if (active === 'player') {
     content = data.player?.text
       ? h(PlayerSheet, { text: data.player.text })
       : h('div', { className: 'twp-empty' }, '（PLAYER.md 尚未建立）')
-  } else if (sub === 'characters') {
+  } else if (active === 'characters') {
     content = h(
       'div',
       null,
       data.characters.length === 0 ? h('div', { className: 'twp-empty' }, '（暂无人物档案）') : null,
       data.characters.map((c) => h(NpcCard, { key: c.id, id: c.id, text: c.text }))
     )
-  } else if (sub === 'mechanics') {
-    content =
-      data.mechanics.length === 0
-        ? h('div', { className: 'twp-empty' }, '（本局未启用带长期状态的机制）')
-        : h('div', null, data.mechanics.map((m) => h(MechanicCard, { key: m.id, id: m.id, text: m.text, defaultOpen: data.mechanics.length === 1 })))
+  } else if (active === 'inventory') {
+    content = h(InventoryPanel, { playerText: data.player?.text, mechanicInventory: inventory })
+  } else if (active === 'mechanics') {
+    content = h(
+      'div',
+      null,
+      systems.map((m) => h(MechanicCard, { key: m.id, mech: m, defaultOpen: systems.length === 1 }))
+    )
   } else {
-    const quests = parseQuests(data.threads?.text)
-    content = quests
-      ? h('div', null, quests.map((q, i) => h(QuestCard, { key: q.id || i, quest: q })))
-      : h(Markdown, { text: data.threads?.text })
+    content = h(QuestPanel, { threadsText: data.threads?.text, mechanicQuests: quests })
   }
   return h(
     'div',
@@ -318,8 +438,8 @@ function PanelBody({ data }) {
     h(
       'div',
       { className: 'twp-subtabs' },
-      SUBTABS.map((t) =>
-        h('button', { key: t.id, className: sub === t.id ? 'twp-subtab active' : 'twp-subtab', onClick: () => setSub(t.id) }, t.label)
+      tabs.map((t) =>
+        h('button', { key: t.id, className: active === t.id ? 'twp-subtab active' : 'twp-subtab', onClick: () => setSub(t.id) }, t.label)
       )
     ),
     h('div', { className: 'twp-content' }, content)
@@ -453,6 +573,7 @@ const CSS = `
   border: 1px solid #3a6b3544; color: #3a6b35; }
 .twp-badge.urgent { background: #9e2b2514; border-color: #9e2b2544; color: #9e2b25; }
 .twp-badge.long { background: #b8860b18; border-color: #b8860b44; color: #6b5a2a; }
+.twp-badge.plain { background: #6b5a2a14; border-color: #6b5a2a33; color: #6b5a2a; }
 
 .twp-quest-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
 .twp-quest-id { font-size: 10.5px; font-weight: 700; color: #f6f1e5; background: #6b5a2a;
@@ -463,6 +584,21 @@ const CSS = `
 .twp-quest-f { margin: 4px 0 2px; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
 .twp-quest-f dt { font-size: 11px; color: #6b5a2a; opacity: 0.75; white-space: nowrap; padding-top: 1px; }
 .twp-quest-f dd { margin: 0; line-height: 1.6; }
+
+.twp-group-h { font-family: "STKaiti", "KaiTi", serif; font-weight: 700; letter-spacing: 3px;
+  color: #6b5a2a; font-size: 12.5px; margin: 4px 2px 8px; display: flex; align-items: center; gap: 8px; }
+.twp-group-h::after { content: ""; flex: 1; border-top: 1px solid #b8860b44; }
+
+.twp-sysq { display: flex; align-items: baseline; gap: 8px; padding: 5px 2px; line-height: 1.55;
+  border-bottom: 1px dashed #b8860b2e; }
+.twp-sysq:last-child { border-bottom: none; }
+.twp-sysq.done { opacity: 0.5; }
+.twp-sysq.done .twp-sysq-title { text-decoration: line-through; }
+.twp-sysq-mark { color: #b8860b; flex: none; }
+.twp-sysq.done .twp-sysq-mark { color: #3a6b35; }
+.twp-sysq-title { font-weight: 600; }
+.twp-sysq-note { flex: 1; font-size: 11.5px; opacity: 0.75; }
+.twp-sysq .twp-badge { margin-left: auto; flex: none; }
 
 .twp-empty, .twp-idle { opacity: 0.55; padding: 14px 6px; line-height: 1.7; }
 .twp-error { color: #9e2b25; padding: 6px 12px; font-size: 12px; }

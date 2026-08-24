@@ -91,22 +91,36 @@ const joined = texts.join('\n')
 const checks = [
   ['人物卡姓名', joined.includes('张宸嘉')],
   ['角色分节-身份', joined.includes('身份')],
-  ['角色分节-装备', texts.some((t) => t.includes('装备'))],
-  ['分页-人物/任务标签', joined.includes('人物') && joined.includes('任务')],
+  ['角色页不含装备（移交物品页）', !texts.some((t) => t.includes('装备'))],
+  ['分页-人物/物品/任务标签', joined.includes('人物') && joined.includes('物品') && joined.includes('任务')],
   ['meta chip（类型）', joined.includes('玩家角色')],
 ]
-// 切到任务分页：模拟点击——直接把 PanelBody 的 sub hook 置为 threads 并重渲染
+// 切分页：直接把 PanelBody 的 sub hook 置为目标 id 并重渲染
 // hooks 序列：WorldPanel(data,error,seq,eff,eff) + PanelBody(sub) → sub 是 index 5
+hooks[5].v = 'inventory'
+texts = fullRender(el)
+const invJoined = texts.join('\n')
+checks.push(['物品页-玩家装备（作训服）', invJoined.includes('作训服')], ['物品页-系统空间（金疮药）', invJoined.includes('金疮药')])
+hooks[5].v = 'mechanics'
+texts = fullRender(el)
+const mechJoined = texts.join('\n')
+checks.push(
+  ['系统页-机制卡 traveler-system', mechJoined.includes('traveler-system')],
+  ['系统页-任务节已流出（无立足巨鹿）', !mechJoined.includes('立足巨鹿')],
+  ['系统页-系统空间已流出（无「当前存放」）', !mechJoined.includes('当前存放')]
+)
 hooks[5].v = 'threads'
 texts = fullRender(el)
-const joined2 = texts.join('\n')
-checks.push(['quest 卡 T-03', joined2.includes('T-03')], ['quest 标题', joined2.includes('田石家人生死未卜')], ['quest 紧急徽章', joined2.includes('紧急')])
+const qJoined = texts.join('\n')
+checks.push(
+  ['任务页-世界线程 T-03', qJoined.includes('田石家人生死未卜')],
+  ['任务页-紧急徽章', qJoined.includes('紧急')],
+  ['任务页-系统任务组（立足巨鹿）', qJoined.includes('立足巨鹿')],
+  ['任务排序-紧急(T-05)在长期(T-03)前', qJoined.indexOf('绎幕黄巾') > -1 && qJoined.indexOf('绎幕黄巾') < qJoined.indexOf('田石家人')]
+)
 hooks[5].v = 'characters'
 texts = fullRender(el)
 checks.push(['NPC 名册（岑恪卡）', texts.join('\n').includes('岑恪') || texts.join('\n').includes('cenke')])
-hooks[5].v = 'mechanics'
-texts = fullRender(el)
-checks.push(['机制卡 traveler-system', texts.join('\n').includes('traveler-system')])
 checks.push(['游戏态后挂 SSE', esCreated >= 1])
 
 let fail = 0
