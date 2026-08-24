@@ -6,6 +6,10 @@ import {
   characterView,
   cleanDisplay,
   stripDevRefs,
+  mapCharRefs,
+  localizeStatus,
+  heroIdentity,
+  heroFacts,
   parsePeopleIndex,
   personBuckets,
   parseThreads,
@@ -14,6 +18,8 @@ import {
   splitMechanics,
   mechanicName,
   mechanicStatus,
+  sectionsOf,
+  splitDoc,
   worldName
 } from '../src/client/viewmodel.js'
 
@@ -228,4 +234,37 @@ test('机制拆分与显示名：不暴露 mechanic id', () => {
 test('世界名：COMPOSITION 标题 ｜ 前半，缺省回退 id', () => {
   assert.equal(worldName(COMPOSITION, 'xingang'), '星港')
   assert.equal(worldName('', 'xingang'), 'xingang')
+})
+
+/** ── Part A 收边（§12.1）────────────────────────────────────────────────── */
+
+test('A1：char-* 映射——括号形式去掉、裸 id 换显示名、未知 id 不泄漏', () => {
+  const names = { 'char-tianshi': '田石', 'char-laozao': '老灶' }
+  assert.equal(mapCharRefs('田石（char-tianshi）亲口说', names), '田石亲口说')
+  assert.equal(mapCharRefs('问 char-laozao 便知', names), '问 老灶 便知')
+  assert.equal(mapCharRefs('char-x99 的身份不明', names), '的身份不明')
+  assert.ok(!mapCharRefs('char-x99 出现', names).includes('char-x99'))
+})
+
+test('A1：stripDevRefs 剔除 PLAYER.md / LEDGER / 裸 .md 引用', () => {
+  assert.ok(!stripDevRefs('时间见 CURRENT.md，未决事项（→ THREADS.md）').includes('.md'))
+  assert.ok(!stripDevRefs('已归档进 LEDGER（详见 story/LEDGER.md）').includes('LEDGER'))
+  assert.ok(!stripDevRefs('装备已入系统空间（→ ../mechanics/traveler-system/STATE.md）').includes('STATE.md'))
+})
+
+test('A4：状态词玩家显示层本地化', () => {
+  assert.equal(localizeStatus('active'), '当前')
+  assert.equal(localizeStatus('open（紧急）'), '进行中（紧急）')
+  assert.equal(localizeStatus('deadline'), '时限')
+  // 非状态词不动
+  assert.equal(localizeStatus('已激活'), '已激活')
+})
+
+test('A3：Hero 摘要只取加粗身份短语与短事实行，不塞整段社会身份', () => {
+  const { sections } = sectionsOf(splitDoc(PLAYER).body)
+  const identity = heroIdentity(sections)
+  assert.deepEqual(identity, ['代理轮机长', '七号坞'])
+  assert.equal(heroFacts(sections), '31 岁，女')
+  // Hero 不承担完整社会身份长段
+  assert.ok(identity.join('').length < 20)
 })

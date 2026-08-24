@@ -55,15 +55,11 @@ export function displayNameOf(docBody, fallback) {
 
 /**
  * 把 workspace 文本片段清洗为玩家可读文本：
- * 去 markdown 链接（留显示名）、去（→ path）交叉引用、去行内代码/加粗记号。
+ * 去 markdown 链接（留显示名）、去（→ path）与 .md 文件引用、去行内代码/加粗记号。
  * 只用于 view model 提取的短文本；分节正文仍走 Markdown 渲染。
  */
 export function cleanDisplay(text) {
-  if (!text) return ''
-  return text
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/（[^（）]*→[^（）]*）/g, '')
-    .replace(/\([^()]*→[^()]*\)/g, '')
+  return stripDevRefs(text)
     .replace(/`([^`]*)`/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\s{2,}/g, ' ')
@@ -73,12 +69,50 @@ export function cleanDisplay(text) {
 /**
  * 温和版清洗：只去链接与（→ path）交叉引用，保留加粗/代码记号。
  * 用于仍走 Markdown 渲染的分节正文——玩家界面不出现路径与跳转符。
+ * A1 补强：整段剔除含 .md / LEDGER / THREADS / PLAYER / CURRENT / COMPOSITION 的
+ * 文件引用（括号组或「详见/见 xxx.md」短语），canonical 原文不动。
  */
 export function stripDevRefs(text) {
   return (text ?? '')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/（[^（）]*→[^（）]*）/g, '')
     .replace(/\([^()]*→[^()]*\)/g, '')
+    .replace(/（[^（）]*(?:\.md|LEDGER|THREADS|PLAYER|CURRENT|COMPOSITION)\b[^（）]*）/g, '')
+    .replace(/\([^()]*(?:\.md|LEDGER|THREADS|PLAYER|CURRENT|COMPOSITION)\b[^()]*\)/g, '')
+    .replace(/(?:详见|参见|参考|见)\s*[^，。；\n]*?\.md[^，。；\n]*/g, '')
+    .replace(/\b[A-Za-z][\w-]*\.md\b/g, '')
+    // LEDGER / THREADS 是 Owner 文件名而非自然词汇，裸出现同样属于开发元数据
+    .replace(/\b(?:LEDGER|THREADS)\b/g, '')
+}
+
+/**
+ * char-* 内部 id 的玩家化映射（A1）：
+ * - `田石（char-tianshi）` → `田石`（括号形式直接去掉，前文已有名字）；
+ * - 裸 `char-tianshi` 且知名 → 替换为显示名；未知 → 隐藏，不泄漏内部 id。
+ * nameById：{ 'char-tianshi': '田石（石头）' }，来自 characters/INDEX.md。
+ */
+export function mapCharRefs(text, nameById = {}) {
+  return (text ?? '')
+    .replace(/[（(]char-[\w-]+[）)]/g, '')
+    .replace(/\bchar-[\w-]+\b/g, (id) => nameById[id] ?? '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s+([，。；、）])/g, '$1')
+    .trim()
+}
+
+/** 玩家显示层本地化（A4）：canonical 状态词 → 中文显示，不改 truth 文件。 */
+const STATUS_DISPLAY = {
+  active: '当前',
+  open: '进行中',
+  deadline: '时限',
+  dormant: '暂离',
+  closed: '已关闭',
+  confirmed: '已确认',
+  pending: '待确认'
+}
+
+export function localizeStatus(text) {
+  return (text ?? '').replace(/\b(active|open|deadline|dormant|closed|confirmed|pending)\b/g, (w) => STATUS_DISPLAY[w] ?? w)
 }
 
 /** 截断到 max 字（概览芯片用）。 */
@@ -278,6 +312,42 @@ export function identityLines(sections) {
   return picked.map((b) => truncate(cleanDisplay(b), 110))
 }
 
+/** ── Hero 摘要（A3：只承担快速识别，1–2 行） ─────────────────────────── */
+
+/** 当前核心身份短语：社会身份/身份节中加粗片段（书写约定：**当前身份**），去重取前 3。 */
+export function heroIdentity(sections) {
+  const sec = findSection(sections, /^社会身份/) ?? findSection(sections, /^身份/) ?? findSection(sections, /职位|任职|阵营/)
+  if (!sec) return []
+  const bullets = bulletsOf(sec.text) ?? []
+  const emphasized = bullets.filter((b) => b.includes('**'))
+  const spans = []
+  for (const b of emphasized.length ? emphasized : bullets.slice(0, 1)) {
+    for (const m of b.match(/\*\*([^*]+)\*\*/g) ?? []) {
+      const t = m.slice(2, -2).trim()
+      if (t && t.length <= 12 && !spans.includes(t)) spans.push(t)
+    }
+  }
+  if (spans.length) return spans.slice(0, 3)
+  // 无加粗书写时降级：首条截断
+  const first = emphasized.length ? emphasized[0] : bullets[0]
+  return first ? [truncate(cleanDisplay(first), 40)] : []
+}
+
+/** 基本信息行：身份节首条的短事实（年龄/性别/来历等），去掉姓名段，取 3 段。 */
+export function heroFacts(sections) {
+  const sec = findSection(sections, /^身份/)
+  if (!sec) return ''
+  const first = (bulletsOf(sec.text) ?? [])[0]
+  if (!first) return ''
+  const parts = cleanDisplay(first)
+    .split(/[；;]/)
+    .map((p) => p.trim())
+    .filter((p) => p && !/^姓名/.test(p))
+    .map((p) => p.replace(/^[^:：]+[:：]\s*/, ''))
+    .filter((p) => p.length > 0 && p.length <= 20)
+  return parts.slice(0, 3).join(' · ')
+}
+
 /** 资源芯片：机制「货币/资源」类分节的第一条含数字 bullet → { label, value }。 */
 function resourceChips(mechanics) {
   const chips = []
@@ -331,7 +401,8 @@ export function buildOverview(projection) {
 
   return {
     name,
-    identity: identityLines(playerSections),
+    identity: heroIdentity(playerSections),
+    facts: heroFacts(playerSections),
     time: fieldValue(currentText, ['时间', '日期']),
     location: fieldValue(currentText, ['当前位置', '位置', '所在']),
     health,
