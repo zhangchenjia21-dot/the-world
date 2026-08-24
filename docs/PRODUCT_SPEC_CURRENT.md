@@ -1,11 +1,11 @@
 ---
 title: The World｜产品与实验总纲
 status: current-canonical-product-spec
-version: 0.4
-updated: 2026-08-23
-stage: TW-01 Minimal World Core
-previous_stage: TW-00.5 Bare DSH Capability Probe COMPLETE
-next: Reality Gate A
+version: 0.5
+updated: 2026-08-24
+stage: Reality Gate B / RPG Experience Validation
+previous_stage: TW-01 Minimal World Core + Reality Gate A PASS
+next: Reality Gate B
 reference_host: DeepSeek Harness
 ---
 
@@ -125,6 +125,8 @@ The World 必须证明自己提供的是 **DSH 之外的长期 RPG 产品价值*
 ↓
 选择主角操控粒度（可随时调整）
 ↓
+选择存档策略
+↓
 开始 / 继续游戏
 ↓
 World Core 恢复并组装必要上下文
@@ -135,9 +137,9 @@ GM 自由主持真实持续世界
 ↓
 世界给出后果并持续演化
 ↓
-World Core 确保 durable changes 被维护
+World Core 捕获 durable changes 并在检查点归并
 ↓
-必要时创建恢复点
+按策略建立恢复点
 ↓
 玩家离开
 ↓
@@ -293,7 +295,7 @@ Player Agency 不等于每个动作都必须由玩家手操。
 Persistent RPG UI 典型 surface：
 
 - System；
-- Quest；
+- Quest / Threads；
 - Character / Relationship；
 - Map；
 - Faction / Reputation；
@@ -302,6 +304,16 @@ Persistent RPG UI 典型 surface：
 - Protagonist Control Mode。
 
 > **UI is a projection of game truth, not a second truth source.**
+
+Gate B 新增正式原则：
+
+> **Workspace is organized for truth maintenance; UI is organized for player needs.**
+>
+> **工作区按事实归属组织，UI 按玩家需求组织。**
+
+因此 Owner 文件与 UI 页面不是一一对应关系。RPG UI 可以跨 `CURRENT / PLAYER / characters / mechanics / THREADS` 聚合玩家可见事实，但不得把聚合结果持久化为第二套长期状态。
+
+默认玩家界面不展示 file path、Owner 说明、source path、internal id、raw updated metadata 等开发信息；这些只属于 debug / inspect 层。
 
 ### Agent Trace Presentation
 
@@ -345,31 +357,31 @@ DSH `think/read/write/tool` 默认不应占据 RPG 主阅读流，但保留 debu
 
 ---
 
-## 9. Current Stage｜TW-01 Minimal World Core
+## 9. TW-01 Result｜Reality Gate A PASS
 
-TW-01 当前目标：
+TW-01 的目标是：
 
 > **让 AI GM 保留 Bare DSH 的自由与创造力，同时稳定承担长期世界维护和关键语义边界。**
 
-### Required Behaviors
+截至 2026-08-24，基于长期三国真实试玩与玩家人工体验，Reality Gate A 正式 **PASS**。
 
-1. Game mode entry / continue；
-2. bounded GM / world / workspace context；
-3. durable maintenance responsibility 不随长局消失；
-4. dynamic durable entity / relationship / commitment / consequence 写回；
-5. knowledge / exposure boundary；
-6. protagonist control authorization context；
-7. minimal pacing semantics；
-8. fresh-session recovery；
-9. Source 与 game-local reality 分离；
-10. 为后续 UI / Map / Mechanics 保留清晰 Owner；
-11. player-confirmed Game Composition：新局的 World / Player Character / Expansion / Control Mode 由玩家确认，Optional expansion 不得由 Agent 静默启用，确认组合固化为 game 配置并跨 Session 恢复。
+正式裁定：`docs/experiments/GATE_A_FINAL_2026-08-24.md`。
 
-详细计划：`docs/TW-01_WORLD_CORE_PLAN.md`。
+TW-01 已形成的实际基础包括：
 
-### Non-scope
+- World Core 0.4.x 薄职责层；
+- Game Workspace Architecture v0.2；
+- 两层 durable maintenance：每回合 DELTAS 捕获 + 检查点归并；
+- dynamic durable identity；
+- knowledge / exposure boundary；
+- protagonist control authorization context；
+- pacing elasticity；
+- fresh-session recovery；
+- Source 与 game-local reality 分离；
+- player-confirmed Game Composition；
+- 自动 / 手动 Save Policy。
 
-TW-01 不默认建设：
+TW-01 仍然不把以下内容吸收进 Core：
 
 - 独立 Agent Runtime；
 - typed mutation engine；
@@ -377,7 +389,6 @@ TW-01 不默认建设：
 - universal entity schema；
 - knowledge ACL database；
 - 全量世界模拟器；
-- 完整 RPG UI；
 - Map / Combat / Economy engine。
 
 ---
@@ -387,17 +398,20 @@ TW-01 不默认建设：
 - `plugins/`：World Core + RPG Experience / Mechanics Plugins；
 - `library/`：reusable Source Assets；
 - `games/<game-id>/state/`：current game-local canonical reality；
+- `mechanics/`：本局机制当前状态；
 - `story/`：important history / commitments / consequences；
-- `memory/`：lossy context compression / retrieval；
+- `memory/`：DELTAS + lossy context compression / retrieval；
 - `saves/`：explicit recovery points；
 - `tools/`：narrow deterministic support；
 - `docs/`：product / architecture / experiment truth。
 
 ---
 
-## 11. Reality Gate A
+## 11. Reality Gates
 
-TW-01 至少证明：
+### Reality Gate A｜PASS
+
+验收项：
 
 1. **Want to Continue**；
 2. **GM Quality Preserved**；
@@ -407,7 +421,25 @@ TW-01 至少证明：
 6. **Cross-session Same World**；
 7. **Player Plays, Agent Maintains**。
 
-通过 Gate A 后，至少实现一个真正的 RPG Experience / Mechanics Plugin，验证 Gate B。
+结果：**PASS（2026-08-24）**。
+
+### Reality Gate B｜CURRENT
+
+Gate B 不问“插件功能够不够多”，而问：
+
+> **至少一个 RPG Experience / Mechanics Plugin 是否在真实游戏中 materially improve 玩家体验。**
+
+当前验收基线：`docs/GATE_B_ACCEPTANCE_v0.1.md`。
+
+核心条件：
+
+1. **Material RPG Value**：拔掉插件后玩家会明显觉得体验变差；
+2. **Canonical Truth Projection**：UI 投影 workspace truth，不建立第二事实源；
+3. **Player-facing Information Architecture**：页面围绕玩家问题，而不是围绕 Owner 文件；
+4. **Does Not Damage the Game Loop**：不增加明显操作税，不损害 Gate A 已证明的自由 GM 循环；
+5. **Not a Single-save Accident**：至少通过第二 fixture / 极简游戏档证明不是当前三国测试档硬编码。
+
+当前首个 Gate B vertical：`plugins/the-world-panel`。
 
 ---
 
@@ -424,17 +456,17 @@ TW-01 至少证明：
 - 玩家可以改变历史；
 - 已发生分叉不得为了贴回 Source 被静默修正。
 
-TW-01 不直接把 Bare DSH `TEST/save/` 的偶然目录结构提升为正式架构。
+当前 `games/luan-shi-sanguo/` 已同时承担 Gate A 长局验证与 Gate B UI vertical 的真实数据源。
 
 ---
 
 ## 13. Open Questions / Non-blocking
 
-- current DSH 最合适的 plugin / context / lifecycle seam；
-- Save / Undo / Restore 第一版实现；
+- `the-world-panel` Player Experience Redesign 后是否达到 Gate B 的 Material RPG Value；
+- Save / Undo / Restore 的完整 player-facing surface；
 - protagonist control mode 最终 UI binding；
-- Source Fidelity manifest 是否需要；
-- 首个 Gate B 插件；
+- Map / Relationship / Faction 等下一批 RPG plugin 的真实优先级；
+- 当前过渡判定层是否最终演化为正式判定机制插件；
 - DSH Developer Preview breaking-change 适配成本。
 
 ---
@@ -448,7 +480,7 @@ TW-01 不直接把 Bare DSH `TEST/save/` 的偶然目录结构提升为正式架
 - **DEC-P05** Player owns Attempt；World owns Consequence；GM owns Playability。
 - **DEC-P06** 开始 → 游玩 → 自动维护 → 离开 → 全新 Session 恢复。
 - **DEC-P07** 三国 Source 初始条件；game-local reality 优先。
-- **DEC-P08** Gate A 后再用 RPG Plugin 验证 Gate B。
+- **DEC-P08** Gate A 后用 RPG Plugin 验证 Gate B。
 - **DEC-P09** Importance controls attention, not existence。
 - **DEC-P10** Chat 展示机制事件；UI 承载机制当前状态。
 - **DEC-P11** 隐藏工作噪音，不限制 Agent 工作能力。
@@ -458,14 +490,17 @@ TW-01 不直接把 Bare DSH `TEST/save/` 的偶然目录结构提升为正式架
 - **DEC-P15** Knowledge Provenance：GM / Source / System knows X != NPC knows X。
 - **DEC-P16** Pacing Elasticity：World Loop 与 Life Loop 同时存在，不用事件持续轰炸替代玩家生活。
 - **DEC-P17** Persistence Maintenance Discipline：durable maintenance 是 World Core 稳定职责，不能随长局衰减消失。
-- **DEC-P18** Game Composition = Player-Confirmed：新局组合（World / Player Character / Expansion / Control Mode）必须经玩家确认；世界包可带 Required / Recommended 内容，Optional expansion 默认关闭且只能由玩家明确启用；确认结果固化为 game 配置（`games/<game-id>/COMPOSITION.md`），Session 恢复继续使用；Source NPC / lore 等世界内部资产不要求逐项选择；组合确认完成前不进入正式叙事。
+- **DEC-P18** Game Composition = Player-Confirmed：新局组合必须经玩家确认，确认结果固化为 game-local canonical 配置并跨 Session 恢复。
+- **DEC-P19** Reality Gate A = PASS（2026-08-24，真实长局人工体验裁定）。
+- **DEC-P20** Workspace for Truth, UI for Player Needs：Owner Architecture != Player Information Architecture。
+- **DEC-P21** Gate B = Material RPG Value Gate：插件必须真实改善玩家体验，不以功能数量或技术可行为 PASS 标准。
 
 ---
 
 ## 15. Current Decision
 
-**Product Definition Gate：PASS。TW-00.5：COMPLETE。TW-01：CURRENT。**
+**Product Definition Gate：PASS。TW-00.5：COMPLETE。TW-01 / Reality Gate A：PASS。Reality Gate B：CURRENT。**
 
 当前正式工作：
 
-> **先核验 current DeepSeek Harness extension seams，然后实现最小 World Core plugin skeleton；第一优先验证长期写回、动态实体、知识边界和 fresh-session recovery，同时保护 Bare DSH 已证明优秀的 GM 能力。**
+> **以 `the-world-panel` 为首个 Gate B vertical，把已经验证可行的 Workspace → UI 投影，从“工作区信息展示器”重构成真正围绕玩家决策、状态查询与沉浸体验组织的 RPG 界面；不借机扩大 World Core 或重建第二套状态源。**
