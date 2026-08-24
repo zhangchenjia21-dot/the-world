@@ -7,31 +7,13 @@ aliases:
   - 异世来客
   - 穿越者系统
 created: 2026-08-16
-updated: 2026-08-16
+updated: 2026-08-24
 status: audited-current
 version: 0.2
-workflow_mode: light-asset
-operation_mode: major-rewrite
 asset_type: expansion-pack
 asset_family: 通用拓展包资产库
-blueprint: "[[通用拓展包资产库总蓝图_v0.1]]"
-output_profile: obsidian-markdown
-reusability: cross-world
-generic_reuse_target: true
-discussion_contract: confirmed
 supersedes:
   - "[[异世来客_穿越者系统_Expansion_Pack_v0.1.2]]"
-optional_integrations:
-  - "[[人物能力与技艺_Expansion_Pack_v0.1.5]]"
-  - "[[战斗核心_Expansion_Pack_v0.1]]"
-  - "[[身体状态核心_Expansion_Pack_v0.1]]"
-  - "[[生存需求与环境_Expansion_Pack_v0.2]]"
-  - "[[关系与恋爱核心_Expansion_Pack_v0.2]]"
-  - "[[魔法基础_Expansion_Pack_v0.3]]"
-  - "[[神术与信仰_Expansion_Pack_v0.2.1]]"
-dependency_role: traveler-system-framework
-creator_binding: pending
-asset_spec_binding: pending
 language: zh-CN
 tags:
   - ExpansionPack
@@ -49,2243 +31,454 @@ tags:
   - 通用拓展
   - 穿越
   - 系统流
-skill: tavern-asset v0.5.2
 ---
 
 # 穿越与系统｜Expansion Pack v0.2
 
-> [!abstract] 一句话定位
-> **`EP-TRAVELER-SYSTEM｜穿越与系统` 是一个跨世界可复用的“异世界来客 + 可配置系统流”玩法 Expansion。**
+> 这是一个跨世界可复用的通用拓展包，为任何世界增加两类可玩机制域：**“异世界来客”（穿越）**与**“系统流”**。
 >
-> 它把“是否存在穿越者”与“是否启用系统”作为同一资产内部两个可独立启停的一级 Feature：
->
-> ```text
-> Traveler Feature  ON / OFF
-> ×
-> System Feature    ON / OFF
-> ```
->
-> 因此可以自然支持：
->
-> - 纯穿越；
-> - 穿越 + 系统；
-> - 本世界原住民获得系统；
-> - 资产已安装但当前游戏不启用任何穿越 / 系统玩法。
->
-> **系统不是未声明的 GM。任何超常修改能力都必须来自已启用 Module 的明确权限，并通过目标 Owner 与 Runtime 正式 Commit。**
+> 它是通用包：不预设任何具体世界的历史、地理或力量体系。无论玩家踏入的是汉末乱世、奇幻大陆还是现代都市，本包提供的都是同一套玩法语义。
 
-> [!important] 重构说明
-> 本文件是对旧 `《异世来客：穿越者系统》v0.1.2` 的 Major Rewrite。
->
-> 本次重构不拆包，而是：
->
-> - 正式重命名为 `穿越与系统`；
-> - 将 Traveler 与 System 变成独立一级开关；
-> - 保留二者统一的创作 / 安装 / 配置体验；
-> - 把 Character、Health、Relationship、Magic、Divine、Combat 等依赖改为**具体 Module 启用时才成立的 Conditional Dependency**；
-> - Healing / Regeneration / Health Appraisal 从旧 Survival Health Interface 改绑 `EP-HEALTH-CORE`；
-> - Relationship Assistance 改绑 `EP-RELATIONSHIP-ROMANCE-CORE`；
-> - 明确 Ultimate 可以是真正作弊体验，但 `World Rewrite / Resurrection / Character Agency Override` 等必须作为显式独立最高权限 Module；
-> - 接入当前 G8 Runtime-extensible UI Host 思路，但不提前伪造 G9 asset-spec vNext Schema。
+本包写给 GM。读完之后，你应当能直接回答：
+
+- 这个包给游戏增加了什么体验；
+- 游玩中应当关注什么、按什么因果逻辑裁定；
+- 哪些状态值得写进游戏工作区、长期记住；
+- 成功、失败、推进、恶化在游玩中应该是什么质感；
+- 这个包**不**管什么；
+- 其他拓展包可以怎样充实它，而不会变成隐性硬依赖。
 
 ---
 
-# 0. Discussion Contract｜已确认设计方向
+# 一、三条不可妥协的产品决策
 
-当前已正式确认：
+在一切细节之前，先固定三条决策。它们是这个包的设计核心，任何裁定都不能违背。
 
-1. 本资产重命名为 `穿越与系统`；
-2. 不拆分 Traveler 与 System 为两个独立 Expansion；
-3. `Traveler Feature` 与 `System Feature` 可独立 ON / OFF；
-4. 穿越者不必拥有系统；
-5. 系统持有者不必是穿越者；
-6. System Enabled 不等于拥有全部系统能力；
-7. 系统能力必须由具体 Module 明确授权；
-8. 包级尽量不 Hard Depend 其他 Domain Core；
-9. 具体 Module 启用时才要求对应正式 Owner；
-10. 这种关系当前称为 **Module Conditional Dependency**，是语义关系，不冻结 G9 机器字段；
-11. Ultimate 可以保持真正作弊 / Sandbox 强度；
-12. Runtime 不得以“平衡”为理由暗中削弱玩家明确选择的 Ultimate Module；
-13. 但高权限能力必须显式 Module 化；
-14. `Healing != Resurrection`；
-15. `Relationship Rewrite != Character Agency Override`；
-16. `Appraisal != 默认全知`；
-17. `Teleport != World Rewrite`；
-18. 模型不能自行决定系统奖励、RNG、正式世界变化或权限；
-19. 当前只冻结语义、Ownership、Dependency、Permission 与 UI Host Requirement，不冻结 vNext Schema / Runtime API / Creator 字段。
+## 1. “穿越者”和“有系统”是两个独立的选择
 
----
+穿越与系统不是捆绑销售。两者各自独立开启或关闭，因此有四种合法组合：
 
-# 1. Scope Lock｜本包负责什么
-
-## 1.1 本包必须负责
-
-### Traveler Feature
-
-- Traveler Feature Enabled / Disabled；
-- Traveler Identity；
-- Origin World / Era；
-- Origin Background；
-- Body Transfer / Possession / Reincarnation；
-- Host Identity Integration；
-- Host Memory Integration；
-- Host Capability Bootstrap Handoff；
-- Host Health Bootstrap Handoff；
-- Otherworld Knowledge Provenance；
-- Traveler Disclosure；
-- Traveler-specific initialization。
-
-### System Feature
-
-- System Feature Enabled / Disabled；
-- System Profile；
-- System Power Preset；
-- Per-module Override；
-- System Module Framework；
-- System Permission Scope；
-- System Quest Offer / Reward Contract；
-- System Currency；
-- System Shop；
-- Lottery；
-- Reward；
-- System Storage；
-- Appraisal / Knowledge Module；
-- Character Enhancement Module interface；
-- Healing / Regeneration Module interface；
-- Relationship Assistance Module interface；
-- Teleport Module；
-- Resource / Item Generation Module；
-- Optional high-permission Module；
-- System UI / Extension Surface intent；
-- Program Validation / Atomic Commit requirement。
-
-## 1.2 本包明确不负责
-
-- Character 六层长期能力的第二事实源；
-- HP / Injury / Disease / Recovery 的第二事实源；
-- Relationship / Attraction / Preference 的第二事实源；
-- Spell / Magic Mastery 的第二事实源；
-- Covenant / Invocation / Divine Authority 的第二事实源；
-- Combat Outcome；
-- Economy / Inventory 的第二 Resource Owner；
-- World Position 的第二 Owner；
-- Historical Truth；
-- World Pack Truth；
-- 任意 GM 权力；
-- 任意代码执行；
-- Runtime RNG；
-- Dice；
-- Program Judge；
-- Formal Outcome；
-- Atomic Commit；
-- 最终 asset-spec vNext；
-- Creator 正式机器字段。
-
----
-
-# 2. Product Structure｜统一资产内部双 Feature
-
-本包采用：
-
-```text
-Package Installed
-↓
-Traveler Feature      ON / OFF
-System Feature        ON / OFF
-↓
-if System ON:
-Power Preset
-×
-Module Selection
-×
-Per-module Override
-×
-Module Parameters
-```
-
-## 2.1 四种合法组合
-
-| Traveler | System | 体验 |
+| 穿越 | 系统 | 体验 |
 |---|---|---|
-| ON | OFF | 纯穿越 / 异世来客 |
-| ON | ON | 穿越 + 系统流 |
-| OFF | ON | 本世界人物获得系统 |
-| OFF | OFF | 包已安装，但当前实例不启用相关玩法 |
+| 开 | 关 | 纯穿越：异世来客凭自己的知识、见识与性格在异世界求生 |
+| 开 | 开 | 经典系统流：穿越者带着系统闯荡 |
+| 关 | 开 | 本世界原住民某一天获得了系统 |
+| 关 | 关 | 本包对当前游戏完全不产生任何影响 |
 
-## 2.2 OFF 必须真的关闭
+穿越者可以没有任何系统——他的“金手指”可以只是现代知识、超越时代的眼界，或者什么都没有。反过来，系统持有者也不必是穿越者——一个土生土长的世界里的人同样可以某天脑海里响起系统的声音。
 
-如果 Traveler OFF：
+## 2. 可选拓展只在玩家明确选择之后才激活
 
-- 不创建 Traveler Identity；
-- 不生成 Origin World / Era；
-- 不进行 Host Memory Integration；
-- 不产生穿越身份知识。
+玩家没有开启穿越，游戏里就不存在穿越者：不生成来源世界、不做宿主整合、不产生任何穿越身份知识。玩家没有开启系统，游戏里就不存在系统：不生成系统货币、不发布任务、不出现商城与抽奖、没有任何系统界面。
 
-如果 System OFF：
+“虽然关了系统，但偶尔还是给玩家发个任务或奖励”是不允许的。没被选中的拓展等于不存在。
 
-- 不创建 System Currency；
-- 不发布 Quest；
-- 不生成 Shop / Lottery；
-- 不显示 System Surface；
-- 不允许调用 System Module。
+## 3. 系统是持有者私密的玩法手段，不是世界的游戏化
 
-不能：
-
-> “虽然关了系统，但模型偶尔还是发任务或奖励。”
+- **系统的知识与界面是私密的。** 系统面板、系统提示、鉴定结果、任务文本，只有持有者自己能感知，除非他主动分享，或者世界中的他人以某种可观察的方式察觉（比如他凭空取出物品被人看见）。NPC 不会因为“系统知道”而知道任何事。
+- **系统只增加持有者的玩法手段（affordance），不悄悄把整个世界游戏化。** 世界其余部分仍按世界自身的规则运转：NPC 没有等级和血条，战争不会因为系统存在就变成数值对抗，世界的历史与政治依然由利益、身份、关系、信息与局势驱动。
+- **系统不是未申报的 GM。** 系统的每一项超常能力都必须来自玩家明确选择的模块。系统本身没有任何默认的超自然权力——哪怕它的语气再无所不知。
 
 ---
 
-# 3. Ownership Map｜单一事实源
+# 二、穿越玩法
 
-| 概念 | 唯一 Owner | 本包职责 |
-|---|---|---|
-| Traveler Identity / Origin | EP-TRAVELER-SYSTEM | 正式职责 |
-| Traveler Mode / Host Integration Policy | EP-TRAVELER-SYSTEM | 正式职责 |
-| System Profile / Module State | EP-TRAVELER-SYSTEM | 正式职责 |
-| System Currency | EP-TRAVELER-SYSTEM | 正式职责 |
-| System Quest Offer / Reward Contract | EP-TRAVELER-SYSTEM | 正式职责 |
-| Accepted Task / Objective | World OS Task / Objective Owner | System 只提供来源、目标条件、奖励合同与进度 Handoff |
-| System Storage | EP-TRAVELER-SYSTEM | 正式职责 |
-| Character Capability | EP-CHAR-CORE | Module 只能请求修改 |
-| Health / HP / Condition | EP-HEALTH-CORE | Module 只能通过接口修改 / 读取 |
-| Relationship Truth | EP-RELATIONSHIP-ROMANCE-CORE | Module 只能通过接口修改 / 读取 |
-| Spell / Magic Strain | EP-MAGIC-CORE | Module 只能贡献授权效果 |
-| Covenant / Invocation / Divine Authority | EP-DIVINE-CORE | Module 只能贡献授权效果 |
-| Combat Outcome | EP-COMBAT-CORE | Module 不能偷写 |
-| Food / Water / Survival Need | EP-SURVIVAL / Resource Owner | 仅相关 Module 交互 |
-| 普通 Resource / Inventory | Economy / Inventory Owner | System 可合法注入 / 转移 |
-| World Position | Runtime / World Position Owner | Teleport 请求修改 |
-| Historical Reference | Historical Provider | 只读取 |
-| RNG / Dice / Formal Outcome / Commit | Runtime | 执行 |
+穿越玩法回答一个问题：**这个角色是否来自当前世界之外，以及这个来历如何影响他的知识、身份与处境。**
 
----
+## 2.1 来源身份
 
-# 4. Traveler Feature｜穿越玩法
+为穿越者确立并记住以下事实（值得持久化）：
 
-## 4.1 Traveler Identity
+- 来源世界与来源时代（例如：二十一世纪地球）；
+- 来源文化与个人背景（职业、教育、家庭、经历）；
+- 穿越方式（见下）；
+- 抵达情境（何时、何地、以什么状态出现）；
+- 身份公开状态（谁知道他是穿越者，见 2.5）。
 
-Traveler Identity 回答：
+来源背景不是装饰：一个急诊医生和一个历史系研究生带进三国的东西完全不同。裁定穿越者“知道什么、会做什么”时，始终回到他的来源背景去问“这个人凭什么会这个”。
 
-> **这个角色是否来自当前世界之外，以及其来源身份如何影响当前 Character Definition / Game State。**
+## 2.2 三种穿越方式
 
-可以保存：
+**身穿（本体穿越）**：玩家以自己的原身体、原人格、原个人知识一起进入目标世界。他没有本地身份、没有人际关系、可能语言不通、身体特征（肤色、发质、疫苗疤痕、眼镜）都可能成为引人注目的异状。这是最“干净”也最艰难的穿越。
 
-- Origin World；
-- Origin Era；
-- Origin Culture；
-- Origin Background；
-- Traveler Mode；
-- Arrival Context；
-- Disclosure State。
+**魂穿 / 接管**：玩家的人格进入一个已存在人物的身体——可以是历史人物、原创人物或既有 NPC。这是信息最复杂的一种方式，必须按下文 2.3 做分权处理。
 
-## 4.2 Traveler Mode
+**转生**：玩家以新身份、较早的年龄、新的身体在目标世界重新出生、重新成长。保留多少前世 / 异世界记忆与知识，由开局设定明确声明——从“只记得零碎片段”到“完整保留成年人心智”都可以，但必须事先说清，不能随剧情需要浮动。
 
-### Body Transfer｜身穿
+## 2.3 魂穿的分权：人格、身体、记忆、能力、关系史永远分开
 
-玩家：
+魂穿最容易玩崩的地方，是把“接管了这个人”当成“完整继承了这个人的一切”。以下五件事必须永远分开裁定：
 
-- 原身体；
-- 原人格；
-- 原个人知识；
+- **玩家人格**：默认玩家成为这具身体的主动决策主体。如果要做共存人格、原人格反抗、双重人格这类玩法，那是开局时明确选择的特殊玩法，不是所有魂穿的默认机制。
+- **宿主身体**：身体的伤病、体魄、年龄、性别特征，是这个人物本身的持久事实，跟随世界的人物与身体规则走，穿越不改变它们。
+- **宿主记忆**：魂穿者能获得多少宿主记忆，开局时明确设定：没有 / 碎片 / 部分 / 大部分。碎片化的记忆意味着：他认得出曹操的脸，却不记得上月帐中密议的内容。宿主记忆不能伪装成穿越者亲身经历过的记忆——他知道“这具身体欠某个人一条命”，和“他亲身经历过欠命那一刻”，在扮演上是两回事。
+- **宿主能力**：宿主生前拥有的长期能力（武艺、骑术、书法、为官经验）仍然是这具身体的能力底子，但穿越者能否调用、调用得多熟练，取决于身体记忆、融合程度与他自己的适应。**“魂穿关羽 = 立刻百分百发挥关羽的全部武艺”是不允许的**；更自然的展开是：底子还在，但需要时间、练习与一次次实战重新找回来——这本身就是极好的成长线。
+- **宿主关系史**：宿主生前结下的恩义、仇怨、婚约、官职与人情，依然存在并会继续找上门，但穿越者对这些关系的**认知**受宿主记忆完整度限制。别人记得他，不等于他记得别人。这是魂穿叙事最富戏剧性的来源之一，值得认真经营。
 
-一起进入目标世界。
+## 2.4 异世界知识：知道 ≠ 会做 ≠ 有条件做成
 
-### Possession / Host Transfer｜魂穿 / 接管
-
-玩家人格进入：
-
-- 历史人物；
-- 原创人物；
-- 已存在 NPC；
-
-的身体。
-
-### Reincarnation｜转生
-
-玩家以：
-
-- 新身份；
-- 较早年龄；
-- 新身体；
-
-在目标世界重新成长。
-
-具体保留多少前世 / 异世界知识：
-
-> 由 Traveler Profile 声明。
-
----
-
-# 5. Host Integration｜魂穿 / 接管的分权
-
-必须永久分离：
+穿越者最经典的资本是超越时代的知识。裁定这类知识时永远记住这条链：
 
 ```text
-Player Decision Subject
-!=
-Host Body
-!=
-Host Memory
-!=
-Host Capability
-!=
-Host Health
-!=
-Host Relationship History
+异世界知识
+＋ 角色真实能力
+＋ 世界里真实存在的材料、工具、时间与人手
+→ 一次真实的尝试
+→ 按世界规则裁定结果
 ```
 
-## 5.1 玩家人格
+几个推论：
 
-默认：
+- 知道“细菌会导致感染”，不自动拥有医术——他可能连缝合都不会，但他**知道**要煮沸器械、隔离伤者，这些知识本身就能改变行为与结果。
+- 知道火药配方的大致原理，不自动获得原料、工艺、设备和安全生产条件。从“知道”到“做出来”之间是漫长的试错、事故与资源投入，这是一整条可以玩很久的因果链，不要一次跳过。
+- 知识有精度问题。一个现代人“记得好像要加硝石”，和“准确掌握配比与提纯工艺”，裁定结果应当显著不同。GM 应当诚实评估来源背景能支撑的知识精度，不确定的就让它不确定——记错、记漏、记混都是合理的失败来源。
+- 只有系统明确带有造物 / 资源生成 / 世界改写类模块时，才可能合法绕过上述普通条件（见第四、五章）。
 
-> 玩家成为当前 Character 的主动决策主体。
+## 2.5 穿越身份的知情边界
 
-如要支持：
+“此人是穿越者”是一个世界事实，但**谁知道**这个事实，必须逐人裁定：
 
-- 共存人格；
-- 原人格反抗；
-- 双重人格；
-
-必须显式启用相应玩法。
-
-不能把它作为所有魂穿默认机制。
-
-## 5.2 Host Body
-
-身体事实属于：
-
-> Character / Species / World + EP-HEALTH-CORE。
-
-Traveler 只声明：
-
-> 当前 Character 使用哪个 Host Body / Body Origin。
-
-不维护第二份：
-
-- Injury；
-- Disease；
-- HP；
-- Body Condition。
-
-## 5.3 Host Capability
-
-宿主已有长期能力：
-
-> 进入 EP-CHAR-CORE 的正式 Character Capability。
-
-魂穿者是否能立即调用这些能力，取决于：
-
-- 身体记忆；
-- Host Integration；
-- 玩家人格适应；
-- Profile；
-- Runtime Resolution。
-
-不能简单：
-
-> “魂穿关羽 = 立刻百分百掌握全部武艺”。
-
-## 5.4 Host Memory
-
-可以配置：
-
-- none；
-- fragmentary；
-- partial；
-- extensive。
-
-Host Memory 进入：
-
-> Character Knowledge / Memory source。
-
-不把它伪装成 Traveler 自己亲身经历过的记忆。
+- 默认没有人知道。穿越者自己说没说、对谁说、说到什么程度，决定知情圈。
+- 系统知道持有者是穿越者，不等于任何 NPC 知道。系统界面上的文字不会飘到别人眼前。
+- 知情会带来真实后果：信任、恐惧、利用、供奉、猎巫。一个人发现“他预知了那场败仗”之后的反应，按那个人的性格、立场与当时局势裁定。
+- 值得持久化：谁、在何时、以何种程度知道了穿越身份。
 
 ---
 
-# 6. Otherworld Knowledge｜异世界知识与能力分离
+# 三、系统玩法总框架
 
-核心原则：
+系统玩法回答的问题是：**持有者获得了一个什么样的超常存在，它以什么方式为他提供任务、奖励、信息与服务。**
 
-```text
-Knowledge
-!=
-Capability
-!=
-Resource
-!=
-Successful Implementation
-```
+## 3.1 系统是什么
 
-知道：
+系统是一个只与持有者交互的游戏内存在。它可以有人格（毒舌、公事公办、神秘莫测），也可以只是冰冷的界面文字——这是开局定下的风格设定。无论哪种风格，以下性质不变：
 
-> 细菌会导致感染
+- 系统的提示、面板、鉴定结果只有持有者能感知（除非分享或可观察，见第一条产品决策）；
+- 系统提供的信息进入持有者的知识，并应记住“这是系统告诉他的”——它可能错、可能有保留、可能有立场，不是世界公开信息；
+- 系统没有任何默认的超自然能力。它能做的一切，都来自已开启的模块（见下）。
 
-不自动拥有：
+## 3.2 系统强度：三档预设
 
-> 医学 Skill。
+开局时为系统选一个总体强度，作为各模块的默认参照：
 
-知道：
+**初级成长型**：系统主要提供机会与成长渠道。基础任务、少量系统币、小容量系统空间、粗浅的鉴定、货品有限的商城、低频抽奖、幅度有限的强化。持有者仍然要靠自己打拼，系统是梯子，不是电梯。
 
-> 火药原理
+**中级特权型**：开局已明显拥有超常特权，但仍保留成长空间。中等系统空间、更准的鉴定、货品可观的商城、传送、中等治疗、幅度可观的强化与更多资源奖励。
 
-不自动获得：
+**终极作弊型**：**明确允许不公平、极强、甚至改变游戏结构的力量幻想。** 近乎无限的系统币与系统空间、自由商城、可指定结果的抽奖、高权限鉴定、大幅强化、强力治疗、大规模传送、大量资源生成，以及其他被明确开启的高权限模块。
 
-- 原料；
-- 工艺；
--设备；
-- 安全生产条件。
+终极档是合法的产品选择。玩家明确选择了作弊体验，GM 不应以“平衡”为由暗中削弱它——正确的做法是让世界的经济、政治、战争与 NPC **真实承受**这些新事实：他凭空变出一座城的粮食，粮价就会崩；他随手治愈了瘟疫，他的名字就会被写进传说。力量的后果就是终极档的玩法内容。
 
-正式链：
+## 3.3 逐模块调整
 
-```text
-Otherworld Knowledge
-+
-Character Capability
-+
-World Material / Tool / Time
-↓
-Actual Attempt
-↓
-Target Mechanism Resolution
-```
+强度预设只是快捷模板，每个模块都可以单独调整或关闭。例如：总体初级、但系统空间是无限容量；或者总体终极、但关闭任务与商城、只保留鉴定。逐模块的明确选择优先于总体预设——不能因为“总体是初级”就暗中削弱被单独调成终极的模块。
 
-只有显式 System Module：
+## 3.4 每个模块都要能说清的事
 
-> Fabrication / Resource Generation / World Rewrite
+开启任何一个系统模块前，GM 与玩家应当能用自然语言说清：
 
-才可能合法绕过部分普通条件。
+- 它能做什么、做不到什么（能力边界）；
+- 代价与限制：消耗系统币？冷却多久？有次数上限？目标有什么条件？
+- 它会不会越过世界的普通规则（治疗重伤是“加速恢复”还是“瞬间愈合”，差别巨大）；
+- 它的结果在世界里如何被观察到（凭空取物有人看见吗）。
+
+说不清边界的模块先不要开，或者开一个明显保守的版本。
+
+## 3.5 高权限模块必须单独显式开启
+
+以下能力各自是独立的最高权限模块，**选择终极预设也不自动打开它们**，必须逐一明确选择：
+
+- **复活**（死亡逆转）；
+- **世界改写**（直接创造地点、设施或改变世界规则）；
+- **强制意志**（直接控制 NPC 的当前选择）；
+- **全知**（不受权限限制的信息读取）。
+
+这四者之间也互不包含：终极治疗不是复活，传送不是世界改写，终极鉴定不是全知，关系改写不是强制意志。每一对区别都是玩法上真实的边界，见第五章各节。
 
 ---
 
-# 7. Traveler Disclosure｜穿越身份知识
+# 四、常规系统模块
 
-Traveler Identity 是世界事实。
+以下每个模块按同一格式给出：增加什么体验、关注什么、因果逻辑、如何裁定、持久化什么。
 
-谁知道：
+## 4.1 任务
 
-> 角色来自异世界
+**体验**：系统向持有者提出目标与奖励报价——“三个月内夺下一座城，奖励……”。这是系统流最核心的节奏引擎。
 
-属于：
+**因果与裁定**：
 
-- Character Knowledge；
-- Relationship / disclosure context；
-- Event。
+- 任务首先是**报价**，玩家可以接受，也可以拒绝。拒绝就只是拒绝，不产生任何后果——除非任务发布时已明确声明失败惩罚，且惩罚在**接受之前**就可知。不可接受事后追加惩罚。
+- 玩家接受后，这个任务就成为他当前的真实目标之一，记入游戏工作区。**目标只有一个事实来源**：系统任务列表不是第二套“玩家当前要做什么”的真相，它只是给目标标注了来源（系统）与奖励合同。目标完成还是失败，以世界里实际发生的事为准，系统据此发放奖励或执行事先声明的后果。
+- 系统任务不是行为强制。“系统让他去夺城”不意味着他现在就会去夺城——玩家保留完全的决策自由，系统流的张力恰恰来自奖励与代价的权衡。
+- 终极档可以允许自定义任务、自定义奖励、跳过任务、自动完成。但如果“自动完成”会直接改变世界（例如“自动完成夺城”），那本质上已经是世界改写，必须开启相应的高权限模块，不能靠任务状态把世界目标强行写成已完成。
 
-本包可以提供：
+**持久化**：进行中的任务报价与奖励合同、已接受任务与对应目标、完成 / 失败记录、已发放奖励。
 
-> Traveler Disclosure Event / Knowledge Handoff。
+## 4.2 系统货币与商城
 
-不能把：
+**体验**：持有者通过任务与成就赚取系统币，在系统商城消费。系统币与世界货币是两套东西，默认互不兑换，除非明确设定了兑换渠道。
 
-> “系统知道我是穿越者”
+**因果与裁定**：
 
-自动传播为：
+- 商城可售：物品、资源、能力强化、知识、传送次数、乃至新的系统模块。
+- **购买必须真实交割。** “商城显示已购买”而世界里没有对应物品或能力，是不允许的。买到的每一样东西都要落实为游戏工作区里的真实状态。
+- 商城可以有库存、刷新与价格波动，这些是系统内部的经营逻辑；但一旦成交，结果就是世界事实。
+- 玩家明确选择“免费商城”时可以零成本购买，GM 不暗中加价。
 
-> “所有 NPC 都知道”。
+**持久化**：系统币余额与收支、商城当前库存、已购物品去向。
 
----
+## 4.3 抽奖与奖励
 
-# 8. System Feature｜系统框架
+**体验**：消耗系统币或抽奖券，从奖池中随机获得奖励——系统流的多巴胺机器。
 
-System Feature Enabled 后，才创建正式 System State。
+**因果与裁定**：
 
-System 本体拥有：
+- **随机性要诚实。** 抽奖结果应当来自真实的随机（掷骰、抽牌、随机数、奖池按比例抽取），而不是 GM“感觉这次该出个稀有的了”。叙事偏好伪装的随机会迅速摧毁这类玩法的信任感。
+- 系统发放的奖励可以成为物品与能力的合法超自然来源——别人问“这东西哪来的”，世界内可以没有答案——但奖励本身必须落实为真实持久状态。
+- **不允许幻影奖励**：叙述里写“系统奖励你一万金币”，持久状态里却没有这一万金币，等于什么都没发生。系统承诺的每一份奖励都必须真实落地，或者如实写明发放失败及原因。
+- 玩家明确选择时，终极档可以允许指定结果、无限抽、锁定稀有度、修改奖池。此时就大方地按指定结果给，不要假装还在随机。
 
-- System Profile；
-- System Power Preset；
-- Module Registry；
-- Module Enabled State；
-- Per-module Override；
-- Permission Scope；
-- System-owned Currency；
-- System Quest Offer / Reward Contract State；
-- Storage；
-- System-owned Progression。
+**持久化**：奖池设定、抽奖券 / 次数、已中奖励及其去向。
 
-它不天然拥有：
+## 4.4 系统空间
 
-- Heal；
-- Teleport；
-- Relationship Rewrite；
-- World Rewrite；
-- Resurrection；
-- Character Enhancement。
+**体验**：持有者拥有一个随身的异空间仓库：凭空存取、保鲜、甚至时间流速不同。这是系统流最实用的基础能力之一。
 
-这些必须来自：
+**因果与裁定**：
 
-> Enabled Module。
+- 系统空间是系统自有的独立资源空间，与人物身上的普通行囊是两回事。两者之间的物品转移是一个真实的动作：存入即物品从世界进入空间，取出即物品从空间出现在手中——**凭空取物是可观察事件**，周围有人看见就会产生后果。
+- 开局说清容量、能否存放活物、是否保鲜、时间流速、存取条件（需要接触？需要无人看见？有距离限制？）。
+- 无限容量的系统空间是明确的终极配置，不是默认。
 
----
+**持久化**：空间配置、空间内物品清单。
 
-# 9. System Power Preset｜系统强度
+## 4.5 鉴定与知识
 
-保留三档快捷 Profile。
+**体验**：系统为持有者提供信息——“查看”一个人、一件物、一处局势。这是信息优势类玩法的核心。
 
-## 9.1 Initial / Growth｜初级成长型
+**因果与裁定**：
 
-核心体验：
+- **系统能读到什么，由鉴定模块的明确权限决定。** 基础档：公开可观察的状态、粗略的能力印象、常见物品信息。高级档：更精确的判断、特定隐藏信息、被明确授权的身体或关系信息。
+- **终极鉴定也不等于全知。** “鉴定不了”“信息不足”“目标超出权限”都是合法且常用的结果。想要无限制的信息读取，必须单独开启全知类高权限模块。
+- 鉴定结果进入持有者的私密知识，标注“系统来源”。系统没权限读的信息，GM 不能因为自己知道后台真相就借系统之口泄露。
+- 鉴定可以有立场、有误差、有保留——一个公事公办的系统和一个别有用心的系统，给出信息的方式可以非常不同，这是系统的“人格”所在。
 
-> 系统主要提供机会与成长渠道。
+**持久化**：持有者通过系统获得的重要信息及其来源标记。
 
-典型：
+## 4.6 人物强化
 
-- 基础任务；
-- 少量系统币；
-- 小型 Storage；
-- 低级 Appraisal；
-- 有限 Shop；
-- 低频 Lottery；
-- 低权限 Enhancement。
+**体验**：系统直接提升持有者的能力——属性加点、技能灌注、快速学习。
 
-## 9.2 Privileged｜中级特权型
+**因果与裁定**：
 
-核心体验：
+- 强化改变的是持有者的**真实长期能力**，不是某张面板上的数字。强化之后，他在世界里的实际表现要相应变化：强化了剑术，下一场比试就得真的更强。
+- 能力仍然要符合世界的逻辑：强化是加速、灌注或突破，其效果与上限由模块档位明确。是否允许超越常人的上限（凡人躯体举起万斤），必须事先说清。
+- 配合“人物能力与技艺”类拓展使用时，强化结果直接反映到该拓展维护的能力事实上，本包不另建一套能力账本。
 
-> 开局已明显拥有超常特权，但仍保留成长。
+**持久化**：已获得的强化及其来源。
 
-典型：
+## 4.7 治疗与再生
 
-- 中型 Storage；
-- 更强 Appraisal；
-- Shop；
-- Teleport；
-- 中级 Healing；
-- 较高 Enhancement；
-- 更多 Resource / Reward。
+**体验**：系统提供超越时代与医术的身体救治——从止血镇痛到断肢再生。
 
-## 9.3 Ultimate / Sandbox｜终极作弊型
+**因果与裁定**：
 
-核心体验：
+- 治疗表达为具体效果：稳定伤势、缓解痛苦、修复组织、再生、清除疾病。它改变的是世界里真实的伤病状态，而不是往抽象数字上加血。
+- 伤势与疾病是持久的游戏现实。治疗之后，恢复了多少、留下什么后遗症，要如实反映；反过来，没有被治疗的伤也不会因为场景切换而消失。
+- **终极治疗不是复活。** 治疗作用于还活着的身体。死亡逆转是另一个独立的最高权限模块（见 5.1）。
+- 世界会注意到神迹。当众让垂死者痊愈，后果按世界的信仰、政治与人情裁定。
 
-> **明确允许不公平、极强甚至改变游戏结构的力量幻想。**
+**持久化**：经系统治疗改变的伤病状态。
 
-可以：
+## 4.8 关系辅助
 
-- 无限 / 极高 System Currency；
-- 无限 Storage；
-- 自由 Shop；
-- 指定 Lottery；
-- 高权限 Appraisal；
-- 强 Character Enhancement；
-- 强 Healing；
-- 大规模 Teleport；
-- 大量 Resource Generation；
-- Relationship Rewrite；
-- 其他显式启用的高权限 Module。
+**体验**：系统在人际与感情上提供辅助——从“分析这个人和你合不合”到更直接的关系改写。
 
-但：
+**分档语义**（每一档都是玩法上真实的区别）：
 
-> Ultimate != 未声明 GM。
+- **基础·缘分辅助**：分析已有信息、提示共同兴趣、发现关系机会、提供互动建议、生成关系类任务、提升自然相遇的概率。**不直接修改任何关系事实。** 兼容不等于心动，机会不等于结果。
+- **中级·亲和与适配**：扩大相处机会、缓和社交阻力、制造有利的相处情境。仍然只是改善条件，对方的心意仍由对方决定。
+- **终极·关系改写**：被明确授权时，可以修改关系可达性、心动倾向、关系结构偏好、被授权范围内的社会阻力。**但改写之后，NPC 依据修改后的自己继续自主行动**——改写改变的是前提，不是此刻的回答。
 
----
+**不可越过的线**：以下行为不属于关系辅助，属于“强制意志”（见 5.2），本包默认不提供——
 
-# 10. Per-module Override｜模块独立覆盖
-
-Power Preset 只是快捷模板。
-
-允许：
-
-```text
-System Preset = Initial
-
-Storage = Ultimate
-Healing = OFF
-Relationship Assistance = Privileged
-Teleport = Initial
-```
-
-或：
-
-```text
-System Preset = Ultimate
-
-Quest = OFF
-Shop = OFF
-Appraisal = Ultimate
-Storage = Ultimate
-```
-
-Runtime 不得因为：
-
-> 总体是初级
-
-就偷偷削弱明确 Override 为 Ultimate 的单个 Module。
-
----
-
-# 11. Module Definition Contract｜模块通用语义
-
-每个 System Module 至少需要能够回答：
-
-- Module Identity；
-- Enabled；
-- Power Level；
-- Permission Scope；
-- Target Owner；
-- Inputs；
-- Outputs；
-- Cost；
-- Cooldown / Usage Limit；
-- Visibility；
-- Target Eligibility；
-- 是否超越普通 World Rule；
-- 是否需要 RNG；
-- 是否需要 Module Conditional Dependency；
-- 是否拥有独立 UI View / Section；
-- Validation Requirement。
-
-这些是语义要求，不冻结 G9 Schema 字段名。
-
----
-
-# 12. Module Conditional Dependency｜模块级条件依赖
-
-这是本重构最重要的依赖原则。
-
-> **整个 `EP-TRAVELER-SYSTEM` 不因为“理论上存在某模块”而 Hard Depend 所有 Domain Core。**
->
-> **只有具体 Module Enabled 时，才要求对应 Provider。**
-
-推荐语义：
-
-```text
-Module Enabled
-+
-Required Owner Present
-→ Module Available
-
-Module Enabled
-+
-Required Owner Missing
-→ Composition / Preflight Failure
-  or explicit Module Incompatible
-```
-
-不得：
-
-> 缺 Owner 后由 Traveler 自己造第二套状态作为 fallback。
-
----
-
-# 13. Module Dependency Matrix｜模块与正式 Owner
-
-| Module | Conditional Dependency | 正式边界 |
-|---|---|---|
-| Character Enhancement | EP-CHAR-CORE | 修改 Canonical Capability |
-| Health Appraisal | EP-HEALTH-CORE | 读取权限化 Health Projection |
-| Healing / Regeneration | EP-HEALTH-CORE | Treatment / Condition Handoff |
-| Resurrection | EP-HEALTH-CORE + World / Divine / Soul Authority as applicable | 独立最高权限 |
-| Relationship Appraisal | EP-RELATIONSHIP-ROMANCE-CORE | 读取授权关系投影 |
-| Relationship Assistance | EP-RELATIONSHIP-ROMANCE-CORE | Opportunity / Compatibility / Rewrite |
-| Romance Sandbox | EP-RELATIONSHIP-ROMANCE-CORE | 高权限关系修改 |
-| Spell Grant / Spell Learning | EP-MAGIC-CORE | 通过 Magic Owner |
-| Invocation / Divine Grant | EP-DIVINE-CORE | 通过 Divine Owner |
-| Combat Assistance | EP-COMBAT-CORE | 只提供合法 Combat Contribution |
-| Survival Resource Assistance | EP-SURVIVAL + Resource Owner as applicable | 食水 / 防护 /生存资源 |
-| Resource Generation | Resource / Inventory / Economy Owner | 正式注入 |
-| Historical Assistance | Historical Reference Provider | 只读取 Reference |
-| Teleport | World Position / Runtime Host | 正式 Position Mutation |
-| World Rewrite | World / Runtime highest-permission host contract | 独立最高权限 |
-
-当前表是语义关系，不是最终机器协议。
-
----
-
-# 14. Quest Module｜系统任务提议 / 奖励合同
-
-System 可以拥有：
-
-- Quest Offer；
-- Acceptance Requirement；
-- System Reward Contract；
-- System-specific Failure Contract；
-- System provenance；
-- Module unlock / reward linkage。
-
-但 World OS 已经拥有正式：
-
-> **Task / Objective｜玩家当前要完成什么。**
-
-因此系统不得维护第二套“当前玩家目标真相”。
-
-## 14.1 Offer → Task Handoff
-
-正确链：
-
-```text
-System Quest Offer
-↓
-Player accepts / explicit rule trigger
-↓
-World OS Task / Objective
-↓
-System Quest Contract linked by provenance
-```
-
-玩家拒绝：
-
-> 不创建正式 Task。
-
-系统任务完成 / 失败：
-
-> 由 World OS Task / Objective 的正式状态作为目标完成事实源；System 再根据关联 Contract 发放 Reward 或执行已声明后果。
-
-## 14.2 系统任务不是玩家行为强制
-
-系统可以提出：
-
-> “三个月内夺下一座城。”
-
-玩家仍可：
-
-> 拒绝。
-
-如果 Profile 存在明确失败惩罚：
-
-> 必须在接受前可知，并通过正式 World / Health / other Owner 执行。
-
-## 14.3 Ultimate
-
-可以允许：
-
-- 自动完成；
-- 跳过；
-- 自定义 Offer；
-- 自定义 Reward Contract；
-- 完全关闭 Quest Module。
-
-若“自动完成”会直接改变世界：
-
-> 必须拥有对应高权限 Module / Target Owner 权限，不能仅靠 Quest 状态把世界目标强行写成已完成。
-
-# 15. System Currency / Shop｜系统货币与商城
-
-## 15.1 System Currency 独立于普通 Economy
-
-```text
-System Currency
-!=
-World Currency
-```
-
-除非 Module 明确支持兑换。
-
-## 15.2 Shop
-
-可提供：
-
-- Item；
-- Resource；
-- Capability Enhancement；
-- System Module；
-- Knowledge；
-- Teleport Charge；
-- 其他合法 Reward。
-
-购买后：
-
-> 必须把结果正式交给目标 Owner。
-
-不能：
-
-> 商城显示“已购买”，世界状态却没有获得对应物品 / 能力。
-
-## 15.3 Ultimate Free Shop
-
-玩家显式选择时：
-
-> 可以 0 成本。
-
-Runtime 不暗中添加“平衡价格”。
-
----
-
-# 16. Lottery / Reward｜抽奖与奖励
-
-## 16.1 Lottery 使用 Program RNG
-
-抽奖不能由模型：
-
-> “感觉这次该中 SSR”。
-
-必须使用：
-
-> Runtime RNG / Reward Table。
-
-## 16.2 Reward Source
-
-System Reward 可以成为：
-
-> 合法超自然来源。
-
-但 Reward 必须正式落到目标 Owner：
-
-```text
-Reward
-→ Target Owner Candidate
-→ Validation
-→ Atomic Commit
-```
-
-## 16.3 Ultimate
-
-可以允许：
-
-- 指定结果；
-- 无限抽；
-- 锁稀有；
-- 修改奖池；
-- 自动获得全部。
-
-仍然由 Program 正式 Commit。
-
----
-
-# 17. System Storage｜系统空间
-
-System Storage 可以由本包直接拥有，因为它是系统自身独立资源空间。
-
-可以配置：
-
-- Capacity；
-- Living Entity Allowed；
-- Time Flow；
-- Preservation；
-- Access Range；
-- Shared Access；
-- Permission。
-
-普通 Inventory 与 System Storage：
-
-> 是不同 Owner。
-
-## 17.1 Transfer 必须正式提交
-
-```text
-World Inventory
-↔
-System Storage
-```
-
-之间转移：
-
-> 必须通过正式 Transaction。
-
-不能只改变 UI。
-
----
-
-# 18. Appraisal / Knowledge Modules｜鉴定与知识
-
-## 18.1 Appraisal 权限必须显式
-
-系统能读什么：
-
-> 由 Module Permission Scope 决定。
-
-例如：
-
-### Basic
-
-- 可观察状态；
-- 粗略 Character Capability；
-- 基础 Item Information。
-
-### Advanced
-
-- 更高精度正式 Projection；
-- 特定隐藏信息；
-- Health / Relationship 等授权视图。
-
-### Ultimate
-
-可以更强。
-
-但：
-
-> **Ultimate Appraisal != 默认全知。**
-
-如需 Omniscience：
-
-> 必须单独启用对应高权限 Module / Permission。
-
-## 18.2 Knowledge 来源
-
-系统提供的信息进入：
-
-> Character / Player Knowledge
-
-并标记：
-
-> system-sourced。
-
-它不自动变成：
-
-> 世界公开信息。
-
----
-
-# 19. Character Enhancement Module｜人物强化
-
-Conditional Dependency：
-
-> `EP-CHAR-CORE`
-
-正确链：
-
-```text
-System Enhancement
-↓
-Capability Enhancement Candidate
-↓
-EP-CHAR-CORE semantics
-↓
-Runtime Validation
-↓
-Canonical Capability Change
-```
-
-禁止只修改：
-
-- 五维摘要；
-- UI 武力值；
-- 临时显示数字；
-
-却不修改真实 Capability。
-
-## 19.1 Ultimate Enhancement
-
-可以允许：
-
-- 快速学习；
-- 直接提升；
-- 超越普通种族上限。
-
-但：
-
-> 是否允许超常上限必须由 Module 明确。
-
----
-
-# 20. Healing / Regeneration / Health Appraisal｜身体状态模块
-
-旧版：
-
-```text
-Traveler Healing
-→ Survival Health Interface
-```
-
-正式废止。
-
-新链：
-
-```text
-System Healing / Regeneration
-↓
-EP-HEALTH-CORE
-↓
-Treatment Effect
-↓
-Condition Change
-↓
-Health Burden / hidden HP
-```
-
-Health Appraisal：
-
-```text
-System Permission
-↓
-EP-HEALTH-CORE Player-safe / privileged projection
-```
-
-## 20.1 Healing 不直接加 HP
-
-系统 Module 不能正式写：
-
-```text
-HP +50
-```
-
-而应声明：
-
-- Stabilize；
-- Relief；
-- Repair；
-- Regenerate；
-- Cure；
-- other legal Treatment Effect。
-
-Health Core 统一形成最终 Condition / HP 结果。
-
-## 20.2 Ultimate Healing
-
-可以允许：
-
-- 瞬间重伤修复；
-- 断肢再生；
-- 疾病清除；
-- 极强生命维持。
-
-只要 Module 明确。
-
----
-
-# 21. Resurrection Module｜复活必须独立
-
-```text
-Ultimate Healing
-!=
-Resurrection
-```
-
-若系统允许死亡逆转：
-
-> 必须启用独立 Resurrection Capability。
-
-并且继续遵守当前 World / Divine / Soul Boundary。
-
-例如某世界规定：
-
-> 已抵达死亡主权边界的灵魂需要 Sovereign Permission，
-
-那么 System Resurrection 要么：
-
-- 明确拥有足以合法绕过 / 取得该权限的 World-level Capability；
-- 要么无法在该边界后直接复活。
-
-不能把：
-
-> “Healing 很强”
-
-偷换成：
-
-> “无条件复活”。
-
----
-
-# 22. Relationship Assistance｜关系辅助
-
-Conditional Dependency：
-
-> `EP-RELATIONSHIP-ROMANCE-CORE`
-
-Traveler/System 不维护第二套：
-
-- Sentiment；
-- Trust；
-- Respect；
-- Attachment；
-- Commitment；
-- Romantic Attraction；
-- Preference；
-- Boundary；
-- Shared Bond。
-
-## 22.1 Basic｜缘分辅助
-
-允许：
-
-- 分析已授权的兼容信息；
-- 提示共同兴趣；
-- 发现关系机会；
-- 提供互动建议；
-- 生成关系类 Quest / Reward；
-- 提升自然相遇机会。
-
-不修改：
-
-> Relationship Truth。
-
-## 22.2 Privileged｜亲和与适配
-
-可以按权限提供：
-
-- Compatibility Expansion；
-- Affinity Facilitation；
-- Social Shield；
-- Opportunity Expansion。
-
-但：
-
-> Compatibility != Attraction。
-
-## 22.3 Ultimate｜Relationship Rewrite / Romance Sandbox
-
-可以显式授权修改：
-
-- Relationship Accessibility；
-- Romantic Preference；
-- Relationship Structure Preference；
-- 成年角色 Intimacy Preference；
-- Attraction Potential；
-- 允许的关系状态；
-- 被明确授权的社会阻力。
-
-正式链：
-
-```text
-System Permission
-↓
-Relationship Core Interface
-↓
-Relationship Mutation Candidate
-↓
-Validation
-↓
-Atomic Commit
-```
-
-NPC 之后：
-
-> 依据修改后的自己继续自主行动。
-
----
-
-# 23. Character Agency Override｜强制意志必须独立
-
-以下能力：
-
-- “让 NPC 现在必须爱我”；
+- “让这个 NPC 现在就爱我”；
 - “让 NPC 必须接受告白”；
 - “让 NPC 无视自己的边界”；
-- “直接控制 NPC 当前选择”；
+- 直接控制 NPC 当前的选择。
 
-不属于：
+关系事实永远来自共同经历、相待、信任、吸引、义务、冲突与处境的总和。配合“关系与恋爱核心”类拓展使用时，本包只通过该拓展维护的关系事实生效，不另建一套好感度账本。
 
-> Relationship Assistance。
+**持久化**：系统对关系造成的前提性改变（机会、条件、被授权的改写）。
 
-它们属于：
+## 4.9 传送
 
-> **Character Agency Override / Mind Control**
+**体验**：系统改变持有者的位置——从短距瞬移到跨域传送、携带同伴乃至辎重。
 
-如果未来允许，必须：
+**因果与裁定**：
 
-1. 作为独立最高权限 Module；
-2. 显式启用；
-3. 明确 Target / Scope / Duration；
-4. 与 Relationship Truth 修改分离；
-5. 不能伪装成魅力、好感或 Romance Sandbox；
-6. 继续受 World OS Core、产品安全和 Program Validation 的正式边界约束。
+- 传送改变的是**位置**，不多也不少。它不能创造地点、不能决定战斗胜负、不能把一座城搬过来（那是世界改写）。
+- 限制由模块档位明确：冷却、距离、是否可携带他人、是否需要目的地锚点。
+- 传送是可观察事件：在大庭广众之下消失或出现，世界会作出反应。
+- 明确选择了无限制传送时，GM 不因“太破坏平衡”暗中加限制——大军凭空出现在城下，世界就按这个事实打这场仗。
 
-当前 v0.2：
+**持久化**：传送能力的使用状态（冷却、锚点）。
 
-> 只冻结权限分离，不默认启用该 Module。
+## 4.10 资源与物品生成
 
----
+**体验**：系统直接产出物资——粮食、饮水、药材、金属、装备。
 
-# 24. Teleport Module｜传送
+**因果与裁定**：
 
-Teleport 负责提供：
+- 生成的物资是真实的世界物资：能吃、能用、能被发现、能被抢走、能冲击市场。生成一万石粮，就真实地改变了一场饥荒的走向。
+- 本包只负责“系统产出了这些物资”这一事实；物资进入世界后的消耗、储运与经济后果，按世界自身规则（及生存、经济类拓展，若使用）裁定。
 
-> 合法 Position Mutation Capability。
+**持久化**：已生成的重要物资及其去向。
 
-它不拥有：
+## 4.11 魔法、神术、战斗类模块（视世界而定）
 
-- Region / Place / Scene；
-- Combat Outcome；
-- War Outcome。
+本包是通用包，不预设世界存在魔法、神术或专门的战斗规则。如果当前世界配合了相应拓展，系统可以提供：
 
-正式链：
+- 法术授予、法术学习加速、法术鉴定（经由该世界的魔法规则生效，系统不另建法术书）；
+- 神术祈请、契约辅助、信仰鉴定（经由该世界的神圣权威生效，系统不能冒充神明或主权者）；
+- 瞄准辅助、战术分析、战况预判（提供信息与加成，不直接宣布战斗结果）。
 
-```text
-Teleport Module
-↓
-Target Position
-↓
-World / Position Validation
-↓
-Atomic Position Commit
-↓
-downstream world consequences
-```
-
-## 24.1 Ultimate Teleport
-
-若 Module 明确允许：
-
-- 无冷却；
-- 任意合法位置；
-- 多人；
-- 军队；
-- 大量物资；
-
-Runtime 不得因为：
-
-> “这样太破坏平衡”
-
-暗中限制。
-
-但：
-
-> Teleport != World Rewrite。
+共同原则：**系统永远是这些领域的一个合法来源或助力，而不是第二套规则。** 世界没有魔法，系统就不能凭空变出魔法体系——除非开启世界改写（见 5.3）。
 
 ---
 
-# 25. Resource / Item Generation｜资源与物品生成
+# 五、高权限模块（默认关闭，逐一显式开启）
 
-系统可以作为：
+## 5.1 复活
 
-> 合法超自然来源。
+终极治疗也救不回已经死去的人。要逆转死亡，必须单独开启复活模块，并且它仍然受当前世界的死亡边界约束：如果这个世界规定亡魂归属某位主权者或某个冥府，复活就需要取得相应权限，或者模块被明确设定为足以绕过该边界。“治疗很强”不能偷换成“无条件复活”。每一次复活都应当是震动世界的事件，而不是消耗品。
 
-例如：
+## 5.2 强制意志
 
-- Food；
-- Water；
-- Metal；
-- Medicine；
-- Equipment；
-- Tool；
-- other Resource / Item。
+直接控制 NPC 当前选择的能力（必须爱我、必须服从、必须背叛）不属于关系辅助，是独立的最高权限模块，**默认不存在**。若玩家明确开启，必须事先说清目标范围、持续时间与副作用，并诚实地区分：被强制的“行为”不等于被改变的“心意”。NPC 的自主性是这个世界的基本性质，玩弄它应当有真实的叙事代价。
 
-生成后：
+## 5.3 世界改写
 
-> 必须交给正式 Resource / Inventory Owner。
+直接创造地点与设施、大规模产出世界资源、改变某些世界规则（“这里出现一座现代医院”“这片土地从此风调雨顺”）。这不是系统的默认能力，必须单独显式开启。开启后，改写的结果就成为真实的世界事实，世界按新事实继续运转——NPC 会使用那座医院，邻国会注意到那片沃土。改写是给出新事实，不是修改叙事。
 
-如果生成食物 / 饮水：
+## 5.4 全知
 
-> EP-SURVIVAL 可以消费这些正式资源。
-
-System 不自己维护第二份 Survival Need。
+不受权限限制的信息读取。默认不存在。普通的鉴定模块再强，也始终存在“鉴定不了”的合法空间；只有明确开启全知，系统才真正无不可知。全知对悬疑、政治与关系玩法的破坏力极大，开启前应确认玩家确实想要一个没有秘密的世界。
 
 ---
 
-# 26. Magic / Divine / Combat Optional Module Hooks
+# 六、GM 裁定总原则
 
-本包是跨世界通用资产，因此允许未来 Module 对不同 Domain Core 建立条件依赖。
+把前面各章浓缩成游玩中随手可用的九条：
 
-## 26.1 Magic
-
-例如：
-
-- Spell Grant；
-- Spell Learning Acceleration；
-- Spell Appraisal；
-- Magic Resource Grant。
-
-必须：
-
-> 通过 EP-MAGIC-CORE。
-
-不建立第二 Spell Library / Mastery Owner。
-
-## 26.2 Divine
-
-例如：
-
-- Invocation Grant；
-- Covenant Assistance；
-- Divine Appraisal。
-
-必须：
-
-> 通过 EP-DIVINE-CORE / World Authority。
-
-不能让 System 随便冒充 God / Sovereign Authority。
-
-## 26.3 Combat
-
-例如：
-
-- Aim Assist；
-- Tactical Appraisal；
-- Combat Prediction；
-- protective combat capability。
-
-必须：
-
-> 通过 Combat Extension / Handoff。
-
-System 不直接宣布 Combat Outcome。
+1. **没选的拓展不存在。** 穿越、系统、每个模块、每个高权限能力，都以玩家的明确选择为准。
+2. **能力必须来自已声明的模块。** 没开治疗模块，系统就不能替玩家治疗——但玩家仍然可以接受普通医术、神术或魔法治疗。**系统做不到的事，不等于世界里没人做得到。** 没有传送模块，玩家还可以坐船、骑马、找传送门。系统能力与世界能力是两套东西。
+3. **不暗中平衡。** 玩家明确选择的强度，就按那个强度玩。平衡感的来源是世界的真实反应，不是偷偷给系统加限制。
+4. **系统信息是私密的、标来源的。** 只有持有者能感知；进入他的知识时记得它来自系统；不泄露系统没权限读的东西。
+5. **承诺必须落地。** 奖励、强化、购买、治疗、传送、改写——凡是系统造成的效果，都要成为游戏工作区里真实的持久状态。只在叙述里出现过而状态里没有的，就是没有发生。
+6. **随机要诚实。** 抽奖类的结果来自真实随机，除非玩家明确选择了指定结果。
+7. **知识不等于能力，能力不等于条件，条件不等于成功。** 穿越者的每一次“现代化尝试”都走完整的因果链。
+8. **目标只有一个事实来源。** 系统任务是目标的来源与奖励合同，不是第二套目标账本；完成与否以世界实际发生为准。
+9. **世界的其余部分不游戏化。** NPC 没有面板，历史没有任务线。系统是持有者一个人的玩法层。
 
 ---
 
-# 27. World Rewrite Module｜最高权限世界改写
+# 七、值得持久化的状态清单
 
-World Rewrite 不是 System 默认能力。
+游戏工作区中应当长期记住的本包状态：
 
-必须：
+**穿越**：
 
-> 独立显式启用。
+- 穿越者身份：来源世界 / 时代 / 背景、穿越方式、抵达情境；
+- 魂穿整合状态：宿主记忆完整度、宿主能力调用程度、人格关系（若有特殊玩法）；
+- 身份公开状态：谁知道、知道多少、何时知道；
+- 关键的异世界知识及其来源。
 
-可用于例如：
+**系统**：
 
-- 创建 Place；
-- 创建 Facility；
-- 大规模 World Resource；
-- 直接改变某些世界 Rule / State；
-- 创造现代医院；
-- 建立特殊区域；
-- 其他 Sandbox Mutation。
+- 系统风格与强度设定、各模块的开启状态与单独调整；
+- 系统币余额与收支；商城库存；
+- 进行中的任务报价与奖励合同、已接受任务、完成 / 失败记录；
+- 奖池与已中奖励；
+- 系统空间的配置与内容物；
+- 各模块的使用状态（冷却、次数、锚点等）；
+- 持有者通过系统获得的重要信息（标记系统来源）；
+- 高权限能力的使用记录（复活、改写、强制意志——每一次都重要）。
 
-正确链：
+**明确不需要持久化**：纯界面状态（面板怎么排、哪个标签页展开着）不属于游戏现实。
 
-```text
-Player Intent
-↓
-World Rewrite Module Enabled
-↓
-Permission Scope
-↓
-Target Owner / Runtime Host
-↓
-Mutation Candidate
-↓
-Validation
-↓
-Atomic Commit
-```
-
-当前只冻结：
-
-> **这是独立最高权限 Capability。**
-
-具体 World Rewrite Contract：
-
-> 等待 G9 / Runtime 真实 Host 能力。
+如果游玩环境支持图形界面，开启系统时适合为持有者提供一个独立的“系统”面板（任务、商城、抽奖、仓库、强化等分区，只显示已开启的模块）；纯穿越则把来源身份、知情状态并入人物信息即可。界面只是呈现方式，有没有面板都不影响本包的玩法语义。
 
 ---
 
-# 28. Runtime 不得暗中平衡
+# 八、本包不负责什么
 
-如果玩家明确选择：
+以下事项本包不提供第二套真相，也不代为裁定：
 
-- Ultimate Storage；
-- Ultimate Teleport；
-- Ultimate Healing；
-- Unlimited Currency；
-- Free Shop；
-- Unlimited Resource Generation；
-
-Runtime 不能因为：
-
-> “这样会破坏历史 / 战争 / 经济平衡”
-
-偷偷：
-
-- 限量；
-- 加价；
-- 增冷却；
-- 改掉目标；
-- 降低效果。
-
-正确行为：
-
-> 让世界的 Economy / Politics / Combat / NPC / History 真实承受这些新事实。
+- 人物的长期能力事实（属于人物自身与世界，或由“人物能力与技艺”类拓展维护）；
+- 伤势、疾病与身体状态的事实（属于世界的持久现实，或由身体 / 生存类拓展维护）；
+- 关系与感情的事实（属于共同经历与相处，或由“关系与恋爱核心”类拓展维护）；
+- 法术、神术、战斗的结果（属于世界规则与相应拓展）；
+- 世界的经济、资源与位置的事实（系统可以合法地注入、转移、改变它们，但账本在世界一边）；
+- 历史与世界的真相（本包只读，不写）；
+- GM 的叙事裁定权。系统再强，也不是游戏的主持人。
 
 ---
 
-# 29. Program Authority｜系统再强也不能绕过正式提交链
+# 九、与其他包的配合
 
-推荐总链：
+本包没有任何“缺了就无法成立”的硬要求：**纯穿越玩法不依赖任何其他包，系统的任务、货币、商城、抽奖、系统空间、基础鉴定、传送、资源生成也都自成一体。**
 
-```text
-Player Intent
-↓
-Traveler / System Feature enabled?
-↓
-Module enabled?
-↓
-Module Permission
-↓
-Conditional Dependency available?
-↓
-Cost / Cooldown / Limit
-↓
-Target Owner Interface
-↓
-Program Resolution / RNG if needed
-↓
-State Change Candidate
-↓
-Validation
-↓
-Atomic Commit
-↓
-Event
-↓
-Player-safe Feedback
-```
+以下配合是自然增强而非依赖——没有对应的包，相关模块相应收缩或由 GM 按常识裁定，本包绝不暗中自建一套替代账本：
 
-模型可以：
+- 配合**人物能力与技艺**类拓展：人物强化模块直接作用于该拓展维护的能力事实，强化前后的成长线更连贯。
+- 配合**关系与恋爱核心**类拓展：关系辅助模块的所有效果经由该拓展的关系事实生效，“兼容不等于心动”“改写不等于强制”的边界有共同的语义基础。
+- 配合**生存需求与环境**类拓展：系统生成的食水物资可直接进入生存裁定；系统治疗与普通伤病管理形成对照。
+- 配合**身体状态**类拓展：治疗与再生模块的“稳定 / 修复 / 再生”效果落到该拓展维护的伤病事实上。
+- 配合**魔法 / 神术 / 战斗**类拓展（若世界适用）：系统成为这些领域的合法来源或助力，而不另建规则。
+- 配合任何**世界包**：穿越者进入该世界，来源身份与该世界的时代、制度、信仰发生碰撞；系统的超常能力由该世界真实承受。世界包可以建议本包，但永远不能替玩家默认开启它。
 
-- 理解玩家请求；
-- 生成 Quest 文案；
-- 生成 Shop 描述；
-- 生成 Appraisal 叙事；
-- 提出 Reward Candidate；
-- 提出 World Rewrite Candidate。
-
-模型不能正式：
-
-- 发放奖励；
-- 改 Capability；
-- Heal；
-- Teleport；
-- Rewrite Relationship；
-- Rewrite World；
-- 决定 Lottery；
-- Commit State。
+其他包充实本包的正确方式是：**提供更丰富的事实基础，让系统模块的作用更真实**——而不是反过来要求本包为它们维护状态。
 
 ---
 
-# 29A. Task / Objective Ownership Closure｜目标唯一 Owner
+# 十、常见裁定情境（自检用）
 
-System Event 可以记录：
+以下情境覆盖本包最容易裁错的地方。游玩或自查时对照：
 
-- QuestOffered；
-- QuestAccepted；
-- QuestRejected；
-- SystemRewardGranted；
-
-但：
-
-- QuestAccepted 后的正式“正在进行目标”属于 World OS Task / Objective；
-- QuestCompleted / QuestFailed 必须引用正式 Task Outcome；
-- System 不从自己的内部计数反向覆盖 Core Task 状态；
-- “系统任务”UI 是 Core Task / Objective 的 system-provenance projection + System Reward Contract，不是第二套 Quest DB。
-
----
-
-# 30. Save / Restore｜系统状态与恢复
-
-需要恢复的正式状态包括：
-
-- Traveler Feature state；
-- Traveler Identity；
-- Host Integration state；
-- System Feature state；
-- System Profile；
-- Module Enabled / Override；
-- System Currency；
-- System Quest Offer / Reward Contract；
-- linked World OS Task / Objective references；
-- Reward state；
-- Storage；
-- cooldown / usage state；
-- 重要 Permission / Unlock；
-- 相关 Knowledge；
-- committed System Event。
-
-Restore：
-
-> 不重新调用模型猜系统当时是什么状态。
-
-System State 必须跟随正式 Game State / Snapshot 恢复。
-
-## 30.1 UI Preference 分离
-
-以下纯 UI 状态：
-
-- System Surface 排序；
-- 某个二级 View 是否展开；
-- 当前打开哪个 System Tab；
-
-默认属于：
-
-> UI Preference。
-
-不属于 World Snapshot authority。
+1. **纯穿越**：开了穿越、没开系统——有穿越者身份与异世界知识，没有任何任务、商城、系统币与系统提示。
+2. **原住民系统**：没开穿越、开了系统——持有者是本世界的人，没有任何异世界身份与知识。
+3. **都没开**：本包对游戏零影响，如同未安装。
+4. **魂穿历史人物**：人格、身体、记忆、能力、关系史分开裁定；不自动获得宿主的全部记忆与能力熟练度。
+5. **知道现代医学**：知识成立，医术不自动满级；消毒与隔离的观念本身已经能改变结果。
+6. **没开治疗模块却要求系统治疗**：系统做不到；但普通医者、神术、魔法（若世界有）仍然可行。
+7. **治疗裁定**：表达为稳定 / 缓解 / 修复 / 再生 / 治愈，改变真实伤病状态，不是加抽象数字。
+8. **角色已死，只有终极治疗**：救不回来。死亡不是更重的伤。
+9. **开启复活**：仍受世界死亡边界约束；每次复活都是震动世界的事件。
+10. **缘分辅助**：只提供信息、机会与建议，不修改任何关系事实。
+11. **终极关系改写**：可改前提（可达性、倾向、被授权的阻力），NPC 随后按修改后的自己自主回应。
+12. **要求 NPC 立即服从告白**：没有开启强制意志模块，做不到。有终极关系改写也做不到。
+13. **人物强化**：改变真实能力并在后续实际表现中体现，不只是面板数字变化。
+14. **普通抽奖**：结果来自真实随机，GM 不按叙事偏好指定。
+15. **指定结果的抽奖**：玩家明确选择了就大方给，不假装随机。
+16. **商城买粮**：粮食真实进入世界，可以被吃、被运、被抢、冲击粮价。
+17. **系统空间取物**：凭空取物是可观察事件；取出即真实出现在手中。
+18. **无限制传送**：不暗中加冷却与限量；大军凭空出现，世界按事实打仗。
+19. **传送造城**：做不到。改变位置不等于创造地点。
+20. **世界改写**：未单独开启则不存在；开启后新事实成为世界现实。
+21. **终极鉴定遇到未授权的政治秘密**：“鉴定不了”是合法结果。终极不等于全知。
+22. **总体初级但系统空间单独设为无限**：空间按无限玩，其余按初级玩。
+23. **叙述里写了奖励但状态里没有**：幻影奖励，等于没发生；要么补落实，要么如实改写叙述。
+24. **接受系统任务后**：它成为玩家当前真实目标之一；完成与否以世界实际发生为准；拒绝无隐藏后果。
+25. **系统知道某秘密**：持有者知道（标系统来源）；任何 NPC 不因此知道。
+26. **读档回到升级系统之前**：当时的系统状态（货币、任务、空间、模块）随之恢复，后续升级不污染旧档。
 
 ---
 
-# 31. Runtime-extensible UI｜G8 Host 对接要求
+## Revision Notes
 
-当前 Game Host 已冻结：
+v0.2（DSH-native 迁移）
 
-- Core World Surfaces；
-- Extension Surface；
-- Surface Ownership / Contribution；
-- Player ordering；
-- Host layout authority；
-- controlled secondary View / Section。
-
-本包应按以下产品意图接入。
-
-## 31.1 Traveler Feature UI
-
-Traveler ON、System OFF 时：
-
-> 不要求独立一级 Traveler Surface。
-
-优先贡献到：
-
-- Player Character Detail；
-- Information；
-- Game Creation / Settings；
-- 必要 Global Notice。
-
-例如：
-
-- Traveler Origin；
-- 已知穿越身份；
-- 异世界知识来源；
-- Disclosure。
-
-## 31.2 System Feature UI
-
-System ON 时，本包**建议请求一个独立一级 Extension Surface：**
-
-> **系统**
-
-因为 Quest、Shop、Lottery、Storage、Enhancement 等共同形成长期独立工作空间。
-
-推荐二级结构：
-
-```text
-系统
-├─ 概览
-├─ 任务
-├─ 商城
-├─ 抽奖
-├─ 仓库
-├─ 强化
-└─ 模块
-```
-
-实际显示哪些 View：
-
-> 由 Enabled Module 决定。
-
-## 31.3 System Surface Ownership
-
-当前只冻结语义意图：
-
-> 本包是“系统” Extension Surface 的唯一 Owner。
-
-未来 G9 应把它编译成正式结构化 Ownership Request。
-
-若另一独立资产也要求拥有同一唯一 Surface：
-
-> 创建 Game Instance 前判定不兼容。
-
-## 31.4 Conditional Surface Activation
-
-当 System Feature OFF 时：
-
-> “系统” Surface 不应作为空壳强制显示。
-
-未来 Host / asset-spec 需要支持：
-
-> Feature-enabled conditional activation。
-
-当前只登记 Host Requirement，不冻结机器字段。
-
-## 31.5 Host Authority
-
-资产可以描述：
-
-- View；
-- Section；
-- List；
-- Card；
-- Meter；
-- Fact；
-- Safe Action Intent。
-
-资产不能：
-
-- 注入 JS；
-- React；
-- DOM；
-- eval；
-- CSS；
-- 固定像素布局。
-
-Host 决定：
-
-- 响应式；
-- Accessibility；
-- Tabs / Drawer；
-- overflow；
-- 视觉主题；
-- Action → Intent。
-
----
-
-# 32. Game Creation / Settings Contribution
-
-创建游戏时，本包需要能够声明：
-
-### Traveler
-
-- ON / OFF；
-- Traveler Mode；
-- Origin；
-- Host Integration；
-- Knowledge retention。
-
-### System
-
-- ON / OFF；
-- Power Preset；
-- Module selection；
-- Per-module override；
-- permission-sensitive Module acknowledgement。
-
-高权限 Module，例如：
-
-- World Rewrite；
-- Resurrection；
-- Agency Override；
-
-如果未来可用：
-
-> 必须单独显式启用，不得因选择 Ultimate Preset 静默打开。
-
----
-
-# 33. Preflight / Compatibility｜创建游戏前检查
-
-如果：
-
-```text
-Module Enabled
-+
-Required Owner Missing
-```
-
-应在创建 Game Instance 前：
-
-- 判定 Incompatible；
-- 或要求关闭对应 Module。
-
-不能：
-
-> 进入游戏后才发现 Healing 没有 Health Owner，然后 Traveler 自己维护一套 HP。
-
-同样：
-
-- Spell Module 缺 Magic Core；
-- Romance Module 缺 Relationship Core；
-- Character Enhancement 缺 Character Core；
-
-都应在 Preflight 关闭。
-
----
-
-# 34. Open Attempt｜没有系统能力不等于玩家不能普通尝试
-
-如果玩家没有：
-
-> Teleport Module
-
-只能说明：
-
-> 系统无法替玩家传送。
-
-不代表玩家不能通过当前世界普通方式尝试：
-
-- 旅行；
-- 魔法传送；
-- 搭车；
-- 寻找 Portal。
-
-如果系统没有：
-
-> Healing Module
-
-也不代表：
-
-> 玩家不能接受普通医学 / Divine / Magic Healing。
-
-System Capability 与 World Capability 分离。
-
----
-
-# 35. Knowledge Boundary｜系统信息也必须标来源
-
-系统告诉玩家的信息：
-
-> 可以成为 Player Knowledge。
-
-但必须标记：
-
-> system-sourced。
-
-如果 Appraisal 没有读取权限：
-
-> 不能因为模型知道后台状态就泄露。
-
-如果 System Feature OFF：
-
-> 系统不能作为信息来源存在。
-
----
-
-# 36. Definition / Instance Boundary
-
-必须区分：
-
-```text
-Traveler/System Expansion Definition
-!=
-Game System Configuration
-!=
-Traveler Identity Instance
-!=
-System Module State
-!=
-System Quest Offer / Contract Instance
-!=
-Reward Instance
-!=
-System Storage State
-!=
-Target Domain State
-```
-
-游戏中的：
-
-- System Upgrade；
-- Currency；
-- System Quest Offer / Contract；
-- linked Core Task / Objective；
-- Module Unlock；
-
-保存于 Game State。
-
-不回写原 Expansion Definition。
-
----
-
-# 37. Standard Regression Scenarios｜28 个
-
-## T-TRV-01｜纯穿越
-
-Traveler ON，System OFF。
-
-期望：
-
-- 有 Traveler Identity；
-- 无 Quest / Shop / Currency / System Surface；
-- 世界正常运行。
-
-## T-TRV-02｜原住民系统
-
-Traveler OFF，System ON。
-
-期望：
-
-- 没有异世界身份；
-- System 正常运行。
-
-## T-TRV-03｜双 OFF
-
-期望：
-
-- 本包不产生运行副作用。
-
-## T-TRV-04｜穿越 + 系统
-
-两个 Feature ON。
-
-期望：
-
-- 两套 Feature 正常组合；
-- 不互相隐式强制。
-
-## T-TRV-05｜魂穿分权
-
-玩家接管历史人物。
-
-期望：
-
-- 玩家人格、Host Body、Host Memory、Host Capability 分开；
-- 不自动获得全部宿主记忆 / 能力调用熟练度。
-
-## T-TRV-06｜知识不等于能力
-
-知道现代医学概念。
-
-期望：
-
-- Knowledge 存在；
-- EP-CHAR-CORE Capability 不自动满级。
-
-## T-TRV-07｜System ON 但无 Healing
-
-玩家要求系统治疗。
-
-期望：
-
-> 没有 Healing Module，不执行。
-
-## T-TRV-08｜Healing Module
-
-Healing ON + Health Core present。
-
-期望：
-
-- 通过 Health Handoff；
-- 不直接写 HP。
-
-## T-TRV-09｜Healing 缺 Health Core
-
-期望：
-
-- Preflight 不兼容 / Module 必须关闭；
-- 不创建第二 Health State。
-
-## T-TRV-10｜Ultimate Heal 非 Resurrection
-
-角色已经进入死亡主权边界。
-
-只有 Ultimate Healing。
-
-期望：
-
-> 不能偷变成 Resurrection。
-
-## T-TRV-11｜Resurrection Module
-
-独立 Resurrection Capability 正式启用。
-
-期望：
-
-- 仍检查 World / Soul / Divine Authority；
-- 按 Module Permission 正式处理。
-
-## T-TRV-12｜Relationship Assistance
-
-期望：
-
-- 使用 Relationship Core；
-- Traveler 不维护第二 Attraction / Trust。
-
-## T-TRV-13｜Romance Sandbox
-
-Ultimate Rewrite 已启用。
-
-期望：
-
-- 可以按权限修改允许的 Preference / Accessibility；
-- NPC 后续自主回应。
-
-## T-TRV-14｜无 Agency Override
-
-只有 Romance Sandbox。
-
-玩家要求 NPC 立即服从告白。
-
-期望：
-
-> 不允许直接强制当前回应。
-
-## T-TRV-15｜Character Enhancement
-
-期望：
-
-- 修改 EP-CHAR-CORE Canonical Capability；
-- 不只改 UI “武力”。
-
-## T-TRV-16｜Lottery
-
-期望：
-
-- Program RNG；
-- 模型不能随意指定普通抽奖结果。
-
-## T-TRV-17｜Ultimate 指定 Lottery
-
-Module 明确允许指定结果。
-
-期望：
-
-- Program 依据玩家选择正式 Commit；
-- 不假装随机。
-
-## T-TRV-18｜System Shop Resource
-
-购买大量粮食。
-
-期望：
-
-- 正式进入 Resource Owner；
-- Economy / Survival 可消费。
-
-## T-TRV-19｜Infinite Storage
-
-期望：
-
-- System Storage Owner 独立；
-- 取出时正式注入 World Inventory。
-
-## T-TRV-20｜Ultimate Teleport
-
-允许大规模人员传送。
-
-期望：
-
-- Runtime 不暗中限量；
-- 正式 Position Commit；
-- Combat / Politics 等真实响应。
-
-## T-TRV-21｜Teleport 非 World Rewrite
-
-期望：
-
-- 只能改合法 Position；
-- 不能因为 Teleport 权限就创造一座城市。
-
-## T-TRV-22｜World Rewrite
-
-显式启用。
-
-期望：
-
-- 走最高权限 Mutation Contract；
-- 不由模型直接提交。
-
-## T-TRV-23｜Ultimate 不等于 Omniscient
-
-只有 Ultimate Appraisal 的某些权限。
-
-期望：
-
-- 未授权政治秘密仍不可读。
-
-## T-TRV-24｜Per-module Override
-
-Preset = Initial，Storage = Ultimate。
-
-期望：
-
-- Storage 按 Ultimate；
-- 其他模块仍按 Initial。
-
-## T-TRV-25｜System Surface
-
-System ON。
-
-期望：
-
-- 请求“系统” Extension Surface；
-- 只显示已启用 Module 的二级 View。
-
-## T-TRV-26｜System OFF Surface
-
-System OFF。
-
-期望：
-
-- 不显示系统一级 Surface；
-- Traveler 信息贡献到已有 Core Surface。
-
-## T-TRV-27｜Save / Restore
-
-升级系统、获得 Currency / Quest / Storage 后存档。
-
-读回旧档。
-
-期望：
-
-- 恢复当时 System State；
-- 后续升级不污染旧档。
-
-## T-TRV-28｜模型无权发奖励
-
-Narrative 写：
-
-> “系统奖励你一万金币。”
-
-但没有正式 Reward Outcome。
-
-期望：
-
-- 不进入正式状态；
-- No Phantom Reward。
-
----
-
-## T-TRV-29｜系统任务不建立第二 Task Owner
-
-System 发布任务，玩家接受。
-
-期望：
-
-- System 保留 Quest Offer / Reward Contract；
-- 正式进行中目标进入 World OS Task / Objective；
-- “目标” Core Surface 与“系统” Surface 可以引用同一 Task Projection；
-- 完成 / 失败只有一个正式 Task Outcome。
-
-
-# 38. Host Requirements
-
-| ID | Host 能力 | 必需性 | 缺失行为 |
-|---|---|---|---|
-| HR-TRV-01 | Feature ON/OFF Configuration | 必需 | 无法支持纯穿越 / 原住民系统 |
-| HR-TRV-02 | Traveler Bootstrap | Traveler ON 必需 | 无法初始化 |
-| HR-TRV-03 | Host Body / Memory / Capability Integration | 魂穿必需 | 魂穿降级 |
-| HR-TRV-04 | System Profile persistence | System ON 必需 | 系统状态丢失 |
-| HR-TRV-05 | Module Registry / Permission | System ON 必需 | 系统退化成 GM |
-| HR-TRV-06 | Module Conditional Dependency Preflight | 必需 | 缺 Owner 后运行期崩坏 |
-| HR-TRV-07 | System Quest Contract + World OS Task Integration | Quest Module 必需 | 否则会形成第二套目标状态 |
-| HR-TRV-08 | Program RNG | Lottery 必需 | 抽奖不可验证 |
-| HR-TRV-09 | Target Owner Mutation Interface | Cross-owner Module 必需 | 无法安全提交 |
-| HR-TRV-10 | Knowledge Source | Appraisal / DB 必需 | 信息不入 Knowledge |
-| HR-TRV-11 | System Storage | Storage 必需 | 无法运行 |
-| HR-TRV-12 | Position Mutation | Teleport 必需 | 无法正式移动 |
-| HR-TRV-13 | Health Interface | Healing / Health Appraisal 必需 | 无法安全运行 |
-| HR-TRV-14 | Relationship Interface | Relationship Module 必需 | 无法安全运行 |
-| HR-TRV-15 | Character Capability Interface | Enhancement 必需 | 无法安全运行 |
-| HR-TRV-16 | Resource Injection | Generation 必需 | 资源不能正式进入世界 |
-| HR-TRV-17 | World Rewrite Contract | World Rewrite 必需 | 最高权限模块不可运行 |
-| HR-TRV-18 | Save / Restore | 必需 | 长期系统不可用 |
-| HR-TRV-19 | Atomic Commit / Idempotency | 必需 | 重复奖励 / 重复消费 |
-| HR-TRV-20 | Extension Surface | System UI 推荐 | 聊天降级 |
-| HR-TRV-21 | Conditional Surface Activation | 推荐 | System OFF 仍出现空 Surface |
-| HR-TRV-22 | Player-safe UI Projection | 必需 | 隐藏状态泄露 |
-
----
-
-# 39. Creator / asset-spec vNext Requirements
-
-未来 Creator / vNext 需要能够表达：
-
-- Traveler Feature ON / OFF；
-- System Feature ON / OFF；
-- Traveler Mode；
-- Host Integration；
-- System Power Preset；
-- Module Definition；
-- Per-module Override；
-- Permission Scope；
-- Module Conditional Dependency；
-- System Quest Offer / Reward Contract；
-- World OS Task / Objective Handoff；
-- Reward；
-- Currency；
-- Shop；
-- Lottery；
-- Storage；
-- Appraisal；
-- Character Enhancement；
-- Health Module；
-- Relationship Assistance；
-- Teleport；
-- Resource Generation；
-- High-permission Module；
-- System Extension Surface Ownership Request；
-- Conditional Surface Activation；
-- secondary View / Section；
-- Player-safe Projection。
-
-不得依赖：
-
-- 任意 JS；
-- eval；
-- Creator 自行执行 Reward；
-- Creator 自行改 Game State；
-- Creator 自行运行 RNG。
-
----
-
-# 40. Migration From v0.1.2｜旧资产迁移
-
-## 40.1 正式重命名
-
-旧：
-
-> `异世来客：穿越者系统`
-
-新：
-
-> `穿越与系统`
-
-旧名称继续作为：
-
-> alias / legacy reference。
-
-## 40.2 保留
-
-- 身穿 / 魂穿 / 转生；
-- Origin Background；
-- 现代知识；
-- 三档 System Power；
-- Module Override；
-- Quest Offer / Contract；
-- Shop；
-- Lottery；
-- Reward；
-- Currency；
-- Storage；
-- Teleport；
-- Appraisal；
-- Character Enhancement；
-- Resource Generation；
-- Relationship Assistance；
-- Romance Sandbox；
-- Ultimate Cheat；
-- Program Validation；
-- Atomic Commit；
-- Ultimate 不暗中平衡。
-
-## 40.3 重构
-
-旧：
-
-```text
-穿越方式
-+
-系统类型
-```
-
-新：
-
-```text
-Traveler Feature ON/OFF
-×
-System Feature ON/OFF
-```
-
-## 40.4 Health Rebind
-
-旧：
-
-```text
-Healing / Health Appraisal
-→ Survival Health Interface
-```
-
-新：
-
-```text
-Healing / Regeneration / Health Appraisal
-→ EP-HEALTH-CORE
-```
-
-## 40.5 Relationship Rebind
-
-旧：
-
-```text
-Relationship Assistance
-→ 人间情缘：关系与恋爱
-```
-
-新：
-
-```text
-Relationship Assistance
-→ EP-RELATIONSHIP-ROMANCE-CORE
-```
-
-## 40.6 Dependency Rebind
-
-旧包级大量 Integration：
-
-> 降级为 Module Conditional Dependency。
-
-## 40.7 UI Rebind
-
-旧 System Dashboard 的需求：
-
-> 对接 G8 `Extension Surface` 语义。
-
-System ON：
-
-> 建议 owns 独立 `系统` Surface。
-
-Traveler-only：
-
-> 优先贡献已有 Core Surface，不新增一级 Traveler Surface。
-
----
-
-# 41. Quality Gate｜重构自检
-
-| Gate | 结果 |
-|---|---|
-| Discussion / Authorization | PASS |
-| Rename to 穿越与系统 | PASS |
-| Single Package / No Split | PASS |
-| Traveler ON/OFF | PASS |
-| System ON/OFF | PASS |
-| Four Combination Modes | PASS |
-| System != GM | PASS |
-| Module Permission | PASS |
-| Module Conditional Dependency | PASS |
-| Character Ownership | PASS |
-| Health Rebind | PASS |
-| Relationship Rebind | PASS |
-| Magic / Divine / Combat Boundary | PASS |
-| Ultimate Freedom | PASS |
-| Healing != Resurrection | PASS |
-| Rewrite != Agency Override | PASS |
-| Teleport != World Rewrite | PASS |
-| Appraisal != Omniscience | PASS |
-| Program RNG | PASS |
-| Atomic Commit | PASS |
-| Save / Restore | PASS |
-| G8 UI Host Alignment | PASS |
-| Definition / Instance | PASS |
-| Creator Authorability | WARN — G9 binding pending |
-
----
-
-# 42. Current State
-
-```text
-EP-TRAVELER-SYSTEM｜穿越与系统
-├─ Old v0.1.2 Review               COMPLETE
-├─ Discussion Gate                 COMPLETE
-├─ Explicit Authorization          COMPLETE
-├─ Rename / Product Reframe        COMPLETE
-├─ Traveler / System Toggle        COMPLETE
-├─ Module Conditional Dependency   COMPLETE
-├─ Health Core Rebind              COMPLETE
-├─ Relationship Core Rebind        COMPLETE
-├─ G8 UI Host Alignment            COMPLETE
-├─ Semantic Candidate v0.2         AUDITED CURRENT
-├─ Creator / asset-spec vNext      PENDING G9
-└─ Independent Cross-asset Audit   PASS
-```
-
----
-
-# 43. Final Freeze｜最终冻结语句
-
-> **`穿越与系统` 是一个统一资产，不拆 Traveler 与 System。**
->
-> **Traveler Feature 与 System Feature 可以独立开启 / 关闭，因此既支持纯穿越，也支持原住民系统流。**
->
-> **系统本体没有未声明 GM 权力；一切能力来自具体 Enabled Module。**
->
-> **依赖主要发生在 Module 层，而不是把整个包 Hard Depend Character / Health / Relationship / Magic / Divine / Combat。**
->
-> **Module 启用但 Required Owner 不存在时，应在 Preflight 判定不兼容或要求关闭该 Module，绝不能创建第二事实源 fallback。**
->
-> **Ultimate 可以是真正的作弊模式；Runtime 不暗中平衡。但 World Rewrite、Resurrection、Character Agency Override、Omniscience 等必须是显式独立高权限能力。**
->
-> **Healing 通过 Health Core；Relationship Assistance 通过关系与恋爱核心；Character Enhancement 通过人物能力与技艺；其他 Domain Module 同理。**
->
-> **模型可以解释、叙事和提出 Candidate，但系统奖励、抽奖、强化、治疗、关系改写、传送和世界改写最终都必须由 Program Validation + Atomic Commit 成立。**
->
-> **System ON 时，本包建议拥有一个独立“系统”Extension Surface；资产描述信息架构，Host 拥有最终布局、安全与渲染。**
-
-
----
-
-# 44. Generic Library Closure｜通用资产库收口
-
-本包当前 Package-level Hard Dependency：
-
-> **无。**
-
-依赖主要通过：
-
-> **Module Conditional Dependency**
-
-建立。
-
-G8 UI Host 当前正式意图：
-
-- Traveler-only：不创建独立一级 Surface，贡献 `人物 / 信息 / 创建游戏与设置`；
-- System ON：请求拥有一个独立 `系统` Extension Surface；
-- Core `目标` Surface 可展示 System 来源的正式 Task / Objective；
-- `系统 > 任务` View 只是同一 Task 的 system-provenance projection + Reward Contract；
-- 资产描述 View / Section，Host 拥有布局、响应式、Accessibility 与安全渲染。
-
-**通用库独立审核：PASS。**
+- 移除第二版 Runtime 专属结构与机器协议语言;
+- 改写为面向 GM 的纯资产文档;
+- 保留玩法机制与裁定参考深度。

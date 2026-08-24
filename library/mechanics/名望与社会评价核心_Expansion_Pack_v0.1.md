@@ -7,742 +7,360 @@ aliases:
 version: 0.1
 status: audited-current
 created: 2026-08-18
-updated: 2026-08-18
+updated: 2026-08-24
 asset_type: expansion-pack
 asset_family: 通用拓展包资产库
-reusability: cross-world
-dependency_role: reputation-core
-hard_dependencies: []
-optional_integrations:
-  - EP-ORG-CORE
-  - EP-RELATIONSHIP-ROMANCE-CORE
-  - EP-CHAR-CORE
-  - future EP-POLITICS-CORE
-  - future Law / Enforcement
-creator_binding: pending-g9
-asset_spec_binding: pending-g9
-skill: tavern-asset v0.8.0
-reference_implementation:
-  - runtime-context-contract-v0.1
+language: zh-CN
+tags:
+  - Expansion-Pack
+  - Reputation
+  - Fame
+  - Rumor
+  - Social Evaluation
+  - Epithet
+  - 名望
+  - 社会评价
+  - 通用资产
 ---
 
 # 名望与社会评价核心｜Expansion Pack v0.1
 
-> [!abstract] 一句话定位
-> **`EP-REPUTATION-CORE｜名望与社会评价核心` 是跨世界通用的公共社会评价事实 Owner：维护某个 Target 在某个 Audience / Social Scope 中，因为哪些可追溯来源而被怎样公开看待，以及这种评价的传播、显著性、争议、时效与社会名号。**
+> [!abstract] 这份拓展包是什么
+> 一份跨世界通用的**公共社会评价**拓展包。启用它，"人们怎么看他"就不再是一句模糊的旁白，而是可以被认真追踪的玩法事实：谁（哪个人物、哪个组织）在哪个社会圈层中，因为哪些可以追溯到来源的事迹，被怎样公开看待；这种评价传得多广、有多显眼、是否被质疑、是否已经过时，以及是否已经凝结成被社会采用的江湖名号。
 >
-> 本 Core 不使用单一“声望值”，不把 Reputation 当世界真相，不把群体评价等同于个人关系，也不因为资产被启用就让全部 Reputation State 常驻模型上下文。
+> 本包最核心的立场只有一句：**社会评价永远属于一个具体的"谁在这样看"。** 不存在脱离圈层的唯一社会形象，也不存在把一切压成一分的"声望值"。
+
+> [!important] 启用方式
+> 这是一份可选拓展包，只有在玩家明确选择启用后才进入游戏。世界包可以推荐它，但任何资产都不应替玩家悄悄打开它。未启用时，GM 按人物卡与世界包直接叙述社会反响即可，不需要套用本包的圈层、评价、传播与名号语言。
 
 ---
 
-# 0. Discussion Contract｜已确认方向
+## 1. 这个包为游戏增加什么
 
-本版本冻结以下方向：
+启用后，游戏里多了一块可以长期玩的机制域：
 
-1. Reputation 是“公共社会评价事实”，不是统一积分 / Fame Score；
-2. v0.1 正式验证 Target：Character + Organization；Place / Item 只保留轻量兼容位；
-3. Audience 是一等语义；不存在脱离 Audience 的唯一社会形象；
-4. 单个具体人的评价默认属于 Relationship，不作为 Reputation Audience；
-5. Evaluation 可以多维、矛盾、并存；不预设统一善恶 / 威望 / 恐惧四轴；
-6. Runtime 可使用隐藏量化维持传播和长期演化，但不冻结数值范围，不产生单一 Reputation Score；
-7. Reputation Claim / Evaluation != Authoritative World Truth；虚假、误传、宣传、争议内容可以形成真实的 Reputation State；
-8. Reputation 不拥有具体 Character Knowledge；群体层社会传播 != 某个角色已知；
-9. Social Epithet / Informal Public Title 归 Reputation；正式职位 / 爵位 / 官号仍归 ORG / Politics；
-10. Reputation 不自动改变 Relationship / Politics / Law / ORG / Character Capability；只作为 Context 或 Handoff 来源；
-11. 不拥有独立一级 Extension Surface；优先贡献 Entity Detail / Information / Contextual Surface；
-12. 本资产从出生即遵守 `tavern-asset v0.8.0` Runtime Activation / Context Contract。
+- **名声会留下来。** 一次公开决斗、一次救灾、一次背叛、一场冤案，会以"某个圈层因此怎样看待你"的形式沉淀下来，跨场景、跨章节持续有效，不会随一次对话结束而消散。
+- **名声是分圈层的。** 江南武林、京师官场、本县百姓、河运商人，可以同时对同一个人持有完全不同的评价。玩家在一个圈子里声名显赫，在另一个圈子里可能默默无闻，也可能臭名昭著。
+- **名声可以是错的。** 传闻、污蔑、宣传、错误归因都能形成真实存在的社会评价。世界真相与公众相信什么，是两笔账。
+- **名号是有分量的。** "青衣剑""活阎罗""北地刀王"这类社会名号，是玩家可以去赢得、去利用、去摆脱的真实社会资本。
+- **玩家拥有塑造名声的自由。** 宣传自己、污蔑对手、洗白恶名、冒充名人、利用恶名恐吓——任何尝试都允许发生，但社会效果由当前的名望事实、圈层、证据与传播条件决定，不由玩家单方面宣布。
 
----
-
-# 1. Canonical Scope
-
-## 1.1 唯一回答的问题
-
-> **“Target 在一个明确的社会 Audience 中，现在因什么来源而被怎样公开评价；这种评价传播多广、是否显著、是否被质疑、是否仍然有效，以及是否形成了被社会采用的非正式名号？”**
-
-## 1.2 本 Core 负责
-
-- Reputation Target reference；
-- Reputation Audience / Social Scope；
-- Reputation Evaluation Record；
-- Reputation Dimension Registry / Contribution Point；
-- Provenance / Source reference；
-- Spread / Reach；
-- Salience；
-- Perceived Credibility / Contest；
-- Persistence / Currentness；
-- Reinforcement / Weakening / Contest / Decay / Retirement lifecycle；
-- Cross-audience Reputation Propagation semantics；
-- Social Epithet / Informal Public Title；
-- Reputation Interpretation；
-- Player-safe Reputation Projection；
-- Reputation-related Intent / Candidate / Event Handoff；
-- Runtime Activation / Context Contract。
-
-## 1.3 本 Core 明确不负责
-
-- Character Capability / actual skill → EP-CHAR-CORE；
-- Directed Sentiment / Trust / Respect / Attachment → Relationship Core；
-- Membership / Role / Rank / Internal Authority → EP-ORG-CORE；
-- Political Recognition / Legitimacy / Claim / Public Authority → Politics；
-- Legal Case / Wanted / Conviction / Warrant → Law / Enforcement；
-- 某个角色是否知道某条 Reputation → Knowledge Owner / World OS；
-- Event / Statement / Rumor 的 Authoritative Truth → World OS / Event / Information Owner；
-- RNG / Dice / Program Judge / Formal Outcome / Atomic Commit → Runtime；
-- 自动决定 NPC 好恶、投票、任命、抓捕、交易成功等下游结果。
-
----
-
-# 2. Core Invariants
-
-1. `Reputation != World Truth`。
-2. `Reputation != Relationship`。
-3. `Reputation != Knowledge`。
-4. `Reputation != Organization Rank / Role`。
-5. `Reputation != Political Recognition`。
-6. `Reputation != Legal Status`。
-7. `Reputation != Character Capability`。
-8. `Awareness / Spread != Positive Evaluation`。
-9. 同一 Target 在不同 Audience 可以拥有相互冲突的 Reputation。
-10. 同一 Audience 对同一 Target 可以同时存在多个相互矛盾的 Evaluation。
-11. Reputation 不建立全局单一总分。
-12. Enabled Reputation Core != Reputation always visible to model。
-13. Reputation dependency / integration != full Reputation prompt inclusion。
-
----
-
-# 3. Target Model
-
-## 3.1 v0.1 正式验证 Target
-
-### Character
-
-例如：
-
-- “江南武林普遍认为沈砚剑术卓绝”；
-- “青河县百姓把他视为救命恩人”；
-- “盐帮认为他是危险的破坏者”。
-
-### Organization
-
-例如：
-
-- “振威镖局以十年少有失镖而闻名”；
-- “某门派在江湖中以护短著称”；
-- “某商号在河运商人中被视为信誉极差”。
-
-ORG 只拥有 Organization Identity / Membership / Role 等结构事实；Organization Reputation 仍由本 Core Own。
-
-## 3.2 轻量兼容 Target
-
-Place / Item 可以作为 Reputation Target reference，但 v0.1 不为其建立专门复杂子系统。
-
-例如：
-
-- 某渡口“匪患严重”的社会口碑；
-- 某把刀“克主”的传说性评价。
-
-若未来 Place / Item Reputation 出现多个独立消费者，再做专门 Consumer Stress Test；当前不扩大 Scope。
-
----
-
-# 4. Audience｜社会评价必须有“谁在这样看”
-
-## 4.1 Audience 是一等语义
-
-禁止只保存：
+这个包引入的因果逻辑是：
 
 ```text
-Target: 沈砚
-Reputation: 很高
+发生了一件可被社会看到的事
+→ 传到某个圈层
+→ 圈层按自己的立场与价值观去解释它
+→ 形成、强化、削弱或争议一条社会评价
+→ 评价继续传播、沉淀、争议、淡化或退役
+→ 影响之后 NPC 的回应、社会的接纳与代价
 ```
 
-应表达：
-
-```text
-Target: 沈砚
-Audience: 江南武林
-Evaluation: 剑术卓绝
-Spread: 广泛
-```
-
-同一 Target 可同时存在：
-
-```text
-江南武林 → 剑术卓绝
-青河县百姓 → 曾救助本地灾民
-盐帮 → 危险且屡坏利益
-京师中央官场 → 基本无显著评价
-```
-
-## 4.2 Audience 不是单纯 Region
-
-Audience 可以由当前世界已有的社会 / 地理 / 组织 Context 限定，例如：
-
-- 江南武林；
-- 京师官场；
-- 本县百姓；
-- 河运商人；
-- 某组织成员群体；
-- 边军将士；
-- 某宗教群体。
-
-Reputation Core 不拥有 Region / Organization / Social Category 的 authoritative identity；只引用合法 Scope。
-
-## 4.3 单个具体人不是默认 Reputation Audience
-
-如果“张三认为李四可靠 / 可敬 / 可恨”，属于：
-
-> Relationship Directed State。
-
-只有达到群体 / 社会圈层层级的公共评价，才属于 Reputation。
+不是"做了一件好事所以声望 +10"，而是"发生过的事被不同的人群按各自的方式记住了"。
 
 ---
 
-# 5. Evaluation｜拒绝统一声望轴
+## 2. 核心立场：名望不是好感度，也不是世界真相
 
-## 5.1 Evaluation Record
+### 2.1 拒绝万能声望值
 
-Reputation Canonical State 以可并存 Evaluation 为中心，例如：
+不要把这个拓展包玩成：
 
-- 剑术卓绝；
-- 医术高明；
-- 守诺；
-- 嗜杀；
-- 清廉；
-- 贪财；
-- 护短；
-- 轻视官府；
-- 商业可靠；
-- 政治投机；
-- 正统 / 异端（作为社会评价时）。
+```text
+声望 = 87
+```
 
-## 5.2 Reputation Dimension Registry
+同一个人可以同时成立：
 
-Core 提供通用 Registry / Grammar；具体世界或 Domain 可以贡献 Dimension Definition。
+```text
+江南武林 → 剑术卓绝，广为流传
+青河县百姓 → 曾救助本地灾民，感恩戴德
+盐帮 → 危险且屡坏其利益，又恨又惧
+京师官场 → 基本无人听闻
+```
 
-例如：
+把这些压成一个"声望：高"，是在丢失游玩价值。
 
-- 江湖 Theme → 武艺声名、侠义、门派正统性社会评价；
-- 商业 Theme → 履约信誉、货品口碑；
-- Politics → 可贡献民望 / 政治声誉的评价维度，但不能把 Political Recognition 迁入 Reputation。
-
-`Definition Contributor != Reputation State Owner`。
-
-## 5.3 不建立统一 Reputation Score
-
-禁止把：
-
-- Fame；
-- Honor；
-- Fear；
-- Trustworthiness；
-- Awareness；
-
-压成单一总值。
-
-Runtime 可以在单个 Record / Dimension 内使用隐藏量化帮助长期演化，但：
-
-- 当前不冻结数值范围；
-- 玩家默认不看精确隐藏值；
-- 数值不是跨维度统一货币；
-- Derived Summary 不得反写 Canonical Evaluation Records。
-
----
-
-# 6. Awareness / Spread 与 Evaluation 分离
+### 2.2 知名度不等于好评，好评不等于可信
 
 一个人可以：
 
 - 很出名但评价中性；
-- 在当地鲜为人知但被少数知情圈层极度恐惧；
-- 恶名传播很广但真实性高度争议；
-- 实力极强但社会几乎不知道。
+- 在当地鲜为人知，却被少数知情圈层极度恐惧；
+- 恶名传播很广，但真实性高度争议；
+- 实力极强，社会却几乎不知道。
 
-因此：
+所以传播范围、评价好坏、可信度是三件独立的事。传闻传得广不代表人们赞同它，更不代表它是真的。
 
-```text
-Awareness / Spread
-!= Evaluation Valence
-!= Credibility
-```
+### 2.3 评价允许矛盾并存
 
-Spread 只描述社会评价在相关 Audience 中的传播 / 覆盖程度，不代表赞同。
+同一圈层对同一个人可以同时存在相互矛盾的评价："剑术卓绝"与"弑师之徒"可以并存，"争议"不是自动平均成中间值。矛盾正是社会评价的真实质感，也是好故事的存货。
 
----
+### 2.4 社会评价不等于私人关系
 
-# 7. Provenance 与 Truth Boundary
+"人人敬重他"是群体层的公共评价；"掌门本人不信任他"是一个具体人的私人态度。两者永远分开：公共名声再好，具体某个 NPC 仍然按自己的人格与关系自主回应。详见第 8 节。
 
-## 7.1 Reputation 可以由真实或虚假来源形成
+### 2.5 社会评价不等于世界真相
 
-来源可以引用：
-
-- Formal Event；
-- Public Statement；
-- Institutional Notice；
-- 目击 / 公开行为；
-- 传闻 / rumor；
-- 宣传 / smear；
-- 错误归因；
-- 多次重复叙述。
-
-## 7.2 Reputation 不复制 World Truth
-
-禁止：
+本包只记录"这个评价依据哪些来源被形成、传播、相信、争议"。来源本身是真是假，由世界本身决定。因此完全允许：
 
 ```text
-reputation.truth = true / false
-```
-
-作为第二世界事实源。
-
-本 Core 只记录：
-
-> 该社会评价依据哪些来源被形成 / 传播 / 相信 / 争议。
-
-来源本身是真是假，由其正式 Owner 决定。
-
-因此完全允许：
-
-```text
-Authoritative Event: 沈砚没有弑师
-Reputation: 江湖中仍有大量人相信“沈砚弑师”
+世界真相：沈砚没有弑师
+江湖评价：仍有大量人相信"沈砚弑师"
 ```
 
 或者：
 
 ```text
-Law: 已正式判无罪
-Reputation: 当地社会仍普遍怀疑其有罪
+官府：已正式判无罪
+当地社会：仍普遍怀疑其有罪
 ```
+
+法律结论、政治承认、公众相信，是三条独立的账，允许长期矛盾。
 
 ---
 
-# 8. Reputation Lifecycle
+## 3. 评价的对象：谁可以有名望
 
-最小生命周期：
+### 3.1 人物与组织是一等对象
 
-```text
-Source Event / Claim / Statement
-↓
-Audience Exposure
-↓
-Social Interpretation
-↓
-Create / Reinforce / Weaken / Contest Reputation Record
-↓
-Cross-audience Spread or Local Persistence
-↓
-Decay / Historical / Retire
-```
+**人物**。例如："江南武林普遍认为沈砚剑术卓绝"；"青河县百姓把他视为救命恩人"；"盐帮认为他是危险的破坏者"。
 
-## 8.1 Reinforcement
+**组织**。例如："振威镖局以十年少有失镖而闻名"；"某门派在江湖中以护短著称"；"某商号在河运商人中被视为信誉极差"。
 
-新来源可以强化已有 Evaluation，但不要求每次都新建第二条同义记录。
+注意分工：组织本身的存在、成员与职位由组织与任职机制承载；但"这个组织在社会上口碑如何"，属于本包。两者各记各的账。
 
-## 8.2 Contest
+### 3.2 地点与物品是轻量对象
 
-相互矛盾的评价可以同时存在；“争议”不是自动平均成中间值。
-
-## 8.3 Decay / Currentness
-
-长期缺乏强化的社会评价可以降低显著性 / 时效；具体衰减速度不在 Semantic Asset 阶段冻结统一公式。
-
-某些历史性名号 / 重大恶名可以长期保留，仍需由 Runtime / World Context 判断。
+地点与物品也可以成为社会评价的对象——某渡口"匪患严重"的口碑、某把刀"克主"的传说——但本包不为它们建立复杂子系统，GM 按同样的语义直接把握即可。
 
 ---
 
-# 9. Social Epithet / Informal Public Title
+## 4. 圈层：社会评价必须有"谁在这样看"
 
-本 Core Own 社会形成的非正式名号，例如：
+### 4.1 圈层是一等语义
 
-- “青衣剑”；
-- “北地刀王”；
-- “活阎罗”；
-- “江左第一侠”。
-
-必须区分：
+禁止只保存"沈砚名声很高"。一条完整的社会评价至少能回答：
 
 ```text
-北地刀王 → Reputation Social Epithet
-执法堂堂主 → ORG Role
-刑部尚书 → ORG Role + Politics Public Authority
-靖北侯 → formal political / legal title owner
+对象：沈砚
+圈层：江南武林
+评价：剑术卓绝
+传播：广泛
 ```
 
-Epithet 允许 Audience-specific adoption，同一人物可在不同圈层拥有不同称呼。
+### 4.2 圈层不是单纯的地理区域
 
-Character legal name / stable alias identity 不迁入 Reputation。
+圈层可以由世界里已有的社会、地理、组织、宗教、行业背景限定：江南武林、京师官场、本县百姓、河运商人、某组织成员群体、边军将士、某个宗教群体。本包不拥有这些圈层本身的定义，只引用世界已经存在的社会结构。
+
+### 4.3 单个具体人不是圈层
+
+"张三认为李四可靠"是一段私人关系，不是社会评价。只有达到群体、社会圈层层级的公共评价，才进入本包。这条边界决定了名望与关系两套机制永远不会互相吞并。
 
 ---
 
-# 10. Cross-domain Boundary
+## 5. 评价维度：拒绝统一声望轴
 
-## 10.1 Relationship
+社会评价以可并存的**评价内容**为中心：剑术卓绝、医术高明、守诺、嗜杀、清廉、贪财、护短、轻视官府、商业可靠、政治投机、正统或异端（作为社会评价时）……
 
-公共“人人敬重他”不等于具体 NPC 的 Respect。
+具体世界可以贡献自己的评价维度：江湖世界关心武艺声名、侠义、门派正统性；商业社会关心履约信誉、货品口碑；政治社会关心民望与政治声誉。本包提供的是"评价总是多维、可按圈层分开"的共同语言，不是一张全世界统一的维度清单。
 
-```text
-Reputation
-→ Relationship interpretation context
-→ NPC 根据 Personality / Relationship 自主回应
-```
-
-Reputation 不直接写 Trust / Respect / Sentiment。
-
-## 10.2 ORG
-
-```text
-Rank / Role / Membership → ORG
-门内普遍认为某长老公正严明 → Reputation
-掌门本人不信任该长老 → Relationship
-```
-
-Reputation 不产生任职、晋升、撤职或 Internal Authority。
-
-## 10.3 Politics
-
-```text
-民间普遍认为太子无德 → Reputation
-正式册立太子 → Politics / ORG role semantics
-其他政治主体正式承认某人为君主 → Politics Recognition
-```
-
-Popular Reputation != Political Recognition / Claim / Control。
-
-## 10.4 Law
-
-```text
-正式通缉 / 定罪 → Law
-社会普遍认为某人是罪犯 / 英雄 → Reputation
-```
-
-二者允许矛盾。
-
-## 10.5 Character Capability
-
-“被认为剑术天下第一”属于 Reputation；实际 Capability / Skill 归 Character Core。
-
-Reputation 可以高估、低估或误判实际能力。
+不存在把名气、荣誉、恐惧、可信度压成单一总分的做法。GM 私下需要量化帮助保持一致性时可以，但不冻结数值范围、玩家默认看不到精确数字、数值不是跨维度通用的货币、任何派生摘要都不得反过来改写原始评价记录。
 
 ---
 
-# 11. Knowledge / Information Boundary
+## 6. 来源与真实性边界
 
-```text
-Reputation exists in world
-!= Player knows it
-```
+### 6.1 评价可以来自真实或虚假的来源
 
-Reputation Core Own 群体层社会传播事实；具体 Character 是否已经听说 / 知道，仍由 Knowledge Owner 维护。
+一条社会评价的来源可以是：正式公开事件、公开声明、官方告示、目击与公开行为、传闻、宣传与污蔑、错误归因、多次重复的叙述。来源越具体，评价越有质感——"他剑术卓绝"不如"他在渡口一战连败三名刀客"值得记住。
 
-Player-safe UI 只能显示玩家已知或合理可见的社会评价投影。
+### 6.2 本包不做真相裁判
 
-不得因为某条 Reputation 在后台存在，就把秘密评价、隐藏名号、秘密污名或未知圈层看法直接展示给玩家。
+本包不回答"这件事到底发没发生"，只回答"社会因此相信了什么、争了什么"。污蔑可以形成真实的恶名，洗白可以形成真实的翻案——二者都是社会层面的真实，与世界事实层面的真实并行不悖。
 
 ---
 
-# 12. Open Attempt / Agency
+## 7. 名望的生命周期
 
-Reputation 不能成为玩家输入白名单。
+一条社会评价的自然生命是：
+
+```text
+来源事件 / 公开言行 / 传闻
+→ 传入某个圈层
+→ 被圈层按自己的立场解释
+→ 形成 / 强化 / 削弱 / 争议一条评价
+→ 跨圈层传播，或在本地沉淀
+→ 随时间淡化，或作为历史性名号长期保留
+```
+
+GM 裁定时把握三点：
+
+- **强化不要求另立新账。** 新来源可以强化已有评价，不必每次重复建档。
+- **争议是常态。** 相互矛盾的评价同时存在，不需要急着裁决出一个唯一结论。
+- **淡化没有统一公式。** 长期缺乏强化的评价自然会降低显著性与时效；但重大恶名、历史性名号可以长期保留——"十年前的那件事"在某些圈层里可以永远不会被忘记。
+
+---
+
+## 8. 社会名号
+
+本包承载社会自发形成的非正式名号："青衣剑""北地刀王""活阎罗""江左第一侠"。
+
+必须与其它身份严格区分：
+
+```text
+"北地刀王"     → 社会名号（本包）
+"执法堂堂主"   → 组织职位（组织与任职机制）
+"刑部尚书"     → 官职（组织任职 + 政治公共权力）
+"靖北侯"       → 正式爵位（政治与制度）
+```
+
+名号允许按圈层分化：同一个人可以在不同圈层拥有不同称呼，也可以在一个圈层赫赫有名、在另一个圈层无人知晓。人物的法定姓名与稳定身份不属于本包。
+
+名号是玩家可以主动经营的资产：自称名号、冒充他人名号、摆脱恶名、让新名号取代旧名号——这些尝试都合法，社会是否买账由圈层、证据与传播条件裁定。
+
+---
+
+## 9. 开放尝试：名声约束效果，不约束行动
+
+本包坚定遵守一条原则：**名望现状约束社会效果，但不删除任何人的尝试。**
 
 玩家可以：
 
 - 冒充某个有名人物；
 - 自称某个社会名号；
-- 试图利用恶名恐吓；
+- 利用恶名恐吓；
 - 否认既有恶名；
 - 散布自我宣传；
 - 污蔑他人；
 - 公开洗白；
-- 在无人认识自己的地方假装“天下皆知”。
+- 在无人认识自己的地方假装"天下皆知"。
 
-Attempt 可以成立；正式社会效果由当前 Reputation、Audience、证据、传播条件、NPC / Runtime 决定。
-
----
-
-# 13. UI / Surface
-
-本 Core 默认：
-
-> **不拥有一级 Extension Surface。**
-
-优先贡献：
-
-- Person Detail；
-- Organization / future Entity Detail；
-- Information Surface；
-- Narrative Contextual；
-- 必要的 Badge / qualitative summary。
-
-未来江湖类资产若拥有 `江湖 / 武林` 长期 Workspace，本 Core只作为 Contributor。
-
-Player-safe Projection 应优先使用定性表达，例如：
-
-- “在江南武林中已广为人知”；
-- “恶名主要限于本地”；
-- “这一说法流传甚广，但争议很大”。
-
-不默认显示隐藏精确数值。
+这些尝试都真实发生。但它们的社会效果由当前名望事实、圈层、证据、传播条件与 NPC 的反应裁定："告诉他们我就是'黑水阎罗'"，能不能吓住人，取决于对方听没听说过这个名号、信几分、怕几分——而不是玩家说了就算。
 
 ---
 
-# 14. Definition → Instance
+## 10. 名望如何影响世界：它是上下文，不是遥控器
 
-World / Domain / Theme 可以贡献：
-
-- Reputation Dimension Definition；
-- Audience category / social-context definition reference；
-- T0 Reputation bootstrap candidate；
-- T0 Social Epithet bootstrap candidate。
-
-运行时：
+社会评价是 NPC 回应、社会接纳、政治与法律处境的**重要上下文**，但它不直接替任何机制做决定：
 
 ```text
-Definition / Bootstrap
-↓ instantiate
-Game Reputation State
-↓ Event / Handoff evolution
-Current Reputation Records
+社会评价
+→ 成为 NPC 与机制读取的上下文
+→ NPC 按自己的人格、关系与所知信息自主回应
 ```
 
-资产版本更新不得静默覆盖已经演化的 Reputation State。
+- 恶名可以带来客栈老板的恐惧、官府的盘查、仇家的寻上门——每一个反应都由具体的人按具体的理由做出；
+- 美名可以打开门路、赢得信任的先机——但开门的人仍然可以选择不开；
+- 本包不自动制造 NPC 好恶、投票结果、任命、抓捕或交易成败。
 
 ---
 
-# 15. Runtime Activation / Context Contract｜Reference Implementation
+## 11. 谁知道什么
 
-## 15.1 Routing Profile
+### 11.1 名望存在 ≠ 玩家知道
 
-Router 级最小描述：
+一条社会评价在世界里真实传播，不代表玩家角色知道它。玩家知道多少，只取决于合法的信息来源：亲耳听到的议论、第三方的转述、公开的告示、长期相处的体感。
 
-```text
-ID: EP-REPUTATION-CORE
-Name: 名望与社会评价核心
-Scope: 群体 / 社会圈层对人物或组织的公共评价、名望、恶名、社会名号、传播与争议
-Typical semantics: 名声 / 风评 / 口碑 / 恶名 / 威名 / 侠名 / 众人怎么看 / 社会评价 / 名号 / 自我宣传 / 污名 / 洗白
-```
+### 11.2 秘密污名与未知圈层看法不自动泄露
 
-Routing Profile 是极小语义目录，不替代完整资产正文。
+后台存在的评价——秘密污名、隐藏名号、某个圈层私下的看法——不能因为玩家没有合法渠道就被剧透。玩家看到的永远是"他已经合法获知的部分"，且应使用定性表达："在江南武林中已广为人知""恶名主要限于本地""这一说法流传甚广，但争议很大"——而不是精确数值面板。
 
-## 15.2 Immediate Activation
+### 11.3 NPC 同样受信息边界约束
 
-典型由 Router 直接激活的输入：
-
-- 玩家询问某人 / 某组织“在某圈子名声如何”；
-- 玩家主动利用自己的名声 / 恶名 / 名号进行社会互动；
-- 玩家试图公开塑造、宣传、洗白、污名化某 Target；
-- 玩家传播或挑战某个社会评价；
-- 玩家询问 / 使用某个 Social Epithet；
-- 当前行动的核心目标就是改变公众看法，而不是只产生一个可能被社会看到的普通 Event。
-
-## 15.3 Downstream Activation｜不要求 Router 预测
-
-公开决斗、犯罪、救灾、背叛、政治事件等**不因为“可能影响声誉”就要求第一轮 Router 必须加载 Reputation**。
-
-正确链：
-
-```text
-Combat / Law / Politics / World Event
-↓ Formal Event / State Change
-Handoff: socially observable / reputation-relevant candidate
-↓
-Reputation downstream activation
-```
-
-Router 只判断当前 Input 的 immediate relevance。
-
-## 15.4 No-load Conditions
-
-以下普通场景通常不应因为本局启用了 Reputation 就加载 Reputation 详细上下文：
-
-- 私人闲聊，且没有人在讨论公共名声；
-- 普通移动 / 物品操作；
-- 纯 Health / Survival 更新；
-- 普通 Character-scale Combat 的动作解析阶段；
-- 组织内部任职变更本身；
-- 任何只需要一个已确定 Reputation Fact 的场景，可由 Runtime 提供最小 projection，不加载完整 Reputation grammar。
-
-## 15.5 Minimal Read Set
-
-根据当前 Intent，只读取：
-
-- 当前 Target；
-- 当前相关 Audience / Social Scope；
-- 与本次问题直接相关的 Evaluation Records；
-- 必要的 Spread / Salience / Contest / Currentness；
-- 直接相关 Provenance 摘要；
-- 相关 Social Epithet；
-- 玩家可安全获知的投影边界。
-
-不得为了询问“本县人怎么看我”加载：
-
-- 所有 Region；
-- 所有 Audience；
-- Target 全部 Reputation 历史；
-- 所有 source Events；
-- 全部组织成员或关系网络。
-
-## 15.6 Model-needed Semantics
-
-模型主要负责：
-
-- 从自然语言识别 Reputation Intent / Audience / Target；
-- 在非确定性场景中解释某来源对某 Audience 可能形成什么社会意义；
-- 生成 candidate Evaluation / Contest / Epithet；
-- 理解宣传、污名、误传、洗白等开放式社会行为；
-- 在多个矛盾 Reputation Record 中生成符合 player-safe context 的自然语言摘要。
-
-## 15.7 Program-owned Logic
-
-Program / Runtime 负责：
-
-- ID / Ref / Enabled asset validation；
-- Authoritative Reputation State 存储；
-- Audience / Target 引用合法性；
-- source ref existence；
-- 时间戳 / active / retired / current lifecycle bookkeeping；
-- deterministic state merge / persistence；
-- Formal Outcome / Atomic Commit；
-- Save / Restore；
-- player-safe projection authorization。
-
-如果某个 Reputation change 可以由明确规则 deterministic 推导，优先 Program 处理；不为了“规则写在资产里”重复交给模型。
-
-## 15.8 Output Candidate
-
-模型最多提出：
-
-- candidate reputation evaluation create / reinforce / weaken / contest；
-- candidate audience / propagation target；
-- candidate social epithet adoption / retirement；
-- candidate public-perception interpretation；
-- clarification need。
-
-模型不得直接提交 Reputation State。
-
-## 15.9 Handoff
-
-### Incoming
-
-- Event / Information → socially observable reputation-relevant candidate；
-- ORG → target / audience organization context；
-- Character Capability → actual capability context（只读，actual != reputation）；
-- Politics / Law → formal public act / declaration context，但不转移其正式状态。
-
-### Outgoing
-
-Reputation 只提供 Context / read projection 给：
-
-- Relationship / NPC response；
-- Politics；
-- Law；
-- Commerce / negotiation；
-- Jianghu Ecology；
-- Narrative。
-
-禁止直接写这些 Domain 的 authoritative state。
-
-## 15.10 Information Boundary
-
-Model Working Set 只包含当前模型职责允许看到的 Reputation projection。
-
-后台存在的 Reputation Records 不自动进入：
-
-- Player Knowledge；
-- Narrative Context；
-- NPC Knowledge；
-- 当前 Router Context。
-
-## 15.11 Context Cost / Bounded Strategy
-
-正式原则：
-
-```text
-Enabled Reputation
-!= Reputation always in model context
-```
-
-```text
-All Reputation Records
-!= Current Reputation Context Slice
-```
-
-```text
-All source history
-!= Current Provenance Summary
-```
-
-大量人物、组织、Audience、历史事件累积时，普通无关 Turn 的模型上下文应保持基本稳定。
-
-当前不冻结统一 token budget；G9 / G11 用真实 Provider 做 Context Composition Stress Test 后再确定可执行 Budget。
+NPC 也只按自己圈层与自己知道的信息做出反应。一个深居内宅的人物不知道江湖上的新传闻；一个刚入城的外乡人不认识本地的名人。误判、后知后觉、把传闻当真相，都是本包提供的耐玩内容。
 
 ---
 
-# 16. Context Composition Reference Scenarios
+## 12. 值得持久化的游戏事实
 
-## Scenario A｜私人叙旧
+启用本包后，游戏工作区里值得作为持久事实维护的：
 
-Enabled：ORG + Reputation + Relationship。
+- 各人物、各组织在各圈层中的当前社会评价：评价内容、来源摘要、传播范围、显著程度、是否被争议、是否仍然有效；
+- 社会名号及其采用圈层；
+- 重大历史性恶名与美名（即使已淡化，也值得保留其存在过的事实）；
+- 玩家与主要 NPC 各自合法知道的部分（与真相分开维护，允许偏差）。
 
-玩家与旧友私下聊天，不谈公众看法。
-
-期望：Relationship / Character context 可相关；Reputation 不因 Enabled 自动加载。
-
-## Scenario B｜辞去门派职位
-
-玩家明确辞任执法堂副堂主。
-
-Immediate：ORG。
-
-Reputation：不自动参与；若辞任成为公开事件并在门内形成评价，再由 Event Handoff 激活。
-
-## Scenario C｜公开决斗
-
-Immediate：Combat / Character / Martial domain。
-
-Reputation：不参与战斗 Formal Resolution；决斗结果成为公开 Event 后，再产生 Reputation Candidate。
-
-## Scenario D｜利用恶名恐吓
-
-玩家：“告诉他们我就是‘黑水阎罗’，让他们识相点。”
-
-Immediate：Reputation + 当前社交 /关系 Context。
-
-Reputation 只提供相关 Audience 是否听说、怎样评价；NPC 最终反应仍由 NPC / Relationship / Runtime 决定。
-
-## Scenario E｜官府通缉但江湖称侠
-
-Law：正式 Wanted / Case。
-
-Reputation：某些 Audience 认为其“替天行道”。
-
-允许二者同时成立，不建立统一善恶结论。
+不需要每件小事都记账。日常闲话照常压缩；当发生对公共评价有实质意义的事件时才落笔。读取旧档时，旧时间点的名望状态原样恢复，之后发生的声名起落不污染旧档。游戏内的名望变化只属于游戏现实，不回写任何源资产。
 
 ---
 
-# 17. Creator / G9 Requirement
+## 13. 这个包不拥有什么
 
-Creator / asset-spec vNext 至少需要支持：
+明确边界，GM 遇到以下事项时应去找对应的归属，而不是塞进名望框架：
 
-- Reputation Dimension contribution；
-- Target / Audience reference semantics；
-- Social Epithet definition / bootstrap；
-- Routing Profile；
-- Runtime Activation / Context Contract；
-- player-safe projection intent；
-- Handoff declaration；
-- Context Composition validation hook。
-
-当前不冻结最终 JSON 字段、Router API、token budget 或 Runtime 数据结构。
+- **具体人物的人格与私人感情**：信任、敬重、亲近、怨恨——属于人际关系机制（如《关系与恋爱核心》）；
+- **组织的结构与任职**：成员、职位、等级、内部权限——属于组织与任职机制（如《组织与任职核心》）；
+- **正式政治承认与公共权力**：册立、承认、官职、合法性——属于政治与公共权力机制；民间普遍认为某人"才是真命天子"是社会评价，正式承认他是君主是政治行为，两者各自成立；
+- **法律状态**：通缉、定罪、赦免——属于法律制度；社会普遍认为某人是罪犯或侠士，与官府正式如何处置，允许长期矛盾；
+- **人物的实际能力**："被认为剑术天下第一"是名望，实际剑术高低属于人物能力机制；名望可以高估、低估或误判实际能力；
+- **某个角色是否知道某件事**：知识边界由游戏的信息层维护，本包只描述群体层的传播事实；
+- **任何数值契约**：统一声望值、好感度、固定传播公式，一概不属于本包。
 
 ---
 
-# 18. Related Notes
+## 14. 与其它素材的关系
 
-- `[[组织与任职核心_Expansion_Pack_v0.1.1]]`
-- `[[关系与恋爱核心_Expansion_Pack_v0.2]]`
-- `[[通用资产库_RuntimeContextContract模式_v0.1]]`
-- `[[通用资产库_Shared_Foundation架构规划_v0.3]]`
-- `[[EP-REPUTATION-CORE_v0.1_单资产审核_2026-08-18]]`
-- `[[ORG-Reputation_Context_Cluster收敛审核_2026-08-18]]`
+本包是跨世界通用包，不硬编码任何具体世界、时代或文化；历史、武侠、奇幻、现代世界都可以直接使用。它与其它资产的关系都是自然协作，不是机器依赖——缺了任何一方，本包照常运转，只是对应维度的质感变薄：
+
+- **《关系与恋爱核心》**：最紧密的邻居。公共评价是私人关系的上下文：NPC 初识玩家时会受名望影响，长期相处后私人关系逐渐盖过公众看法。但公共名声永远不直接改写私人信任，私人好恶也永远不直接等于公共评价。如果同时启用关系玩法，NPC 对名望的回应会获得更细腻的人格化表达。
+- **《组织与任职核心》**：组织的职位与声望是两笔账——"门内普遍认为某长老公正严明"是名望，"他是长老"是任职。名声不自动产生晋升或撤职；如果同时启用组织玩法，门派、商号、官府的内部口碑会获得更具体的圈层依托。
+- **政治与公共权力类玩法**：社会评价可以成为政治压力的来源——民望所归、民心尽失——但公众拥戴不等于正式政治承认。如果同时启用政治玩法，名望会成为政争中真实可用的筹码。
+- **法律类玩法**：通缉与定罪是法律事实，"人们认为他是罪犯还是侠士"是社会评价，两者允许并存。
+- **人物能力类玩法**：实际能力是名望的来源之一，也是名望的参照系——盛名之下其实难副，是完全可以成立的玩法状态。
+- **世界包**：提供圈层的实际内容——这个世界有哪些社会圈层、各自的价值观与敏感点。世界包推荐本包不等于自动启用。
+- **其它事件来源**（战斗、政争、救灾、犯罪、奇迹……）：任何可被社会看到的事件都是名望的上游。没有这些素材，名望机制照常成立，只是来源少一些；有了它们，名声的形成更密、更具体。
+
+每个素材都可以独立选用；没有哪个会因为没有本包而失效，本包也不会因为缺了哪个而变成空壳。
+
+---
+
+## 15. 常见情形与裁定参考
+
+以下情形帮助 GM 把握本包的语义边界。它们不是穷举，而是示范"符合本包立场的裁定长什么样"。
+
+**私人叙旧不涉及名望。** 玩家与旧友私下聊天，没有人在谈论公众看法——按普通关系互动处理，不需要套用名望框架。
+
+**辞任是任职的事，反响是名望的事。** 玩家辞任执法堂副堂主：职位变动按组织与任职机制处理；这件事若成为公开事件并在门内形成评价，再作为名望问题单独裁定。
+
+**决斗的胜负不是名望的胜负。** 一场公开决斗先按战斗机制裁定胜负；决斗结果成为公开事件之后，再裁定它在各圈层留下什么评价。胜负是确定的，评价是开放的——赢了决斗也可能被议论"胜之不武"。
+
+**利用恶名恐吓。** 玩家："告诉他们我就是'黑水阎罗'，让他们识相点。" 裁定：对方是否听说过这个名号、信几分、怕几分，逐个判断；听说过的可能腿软，没听过的可能嗤笑，听过但不怕的可能反而被激怒。
+
+**官府通缉但江湖称侠。** 官府正式通缉是法律事实；某些圈层认为他"替天行道"是社会评价。两者同时成立，不裁决出一个统一的"善恶结论"。
+
+**错误的名声。** 玩家被误传为某桩大案的凶手。这条恶名是真实存在的社会事实——玩家需要面对的是真实的舆论后果，而"找出真相"与"扭转舆论"是两件可以分别去做、也可能只做成一件的事。
+
+**盛名无人识。** 玩家来到一个从未涉足的地区。他在故乡的一切名声在这里都不存在——自称身份合法，但没人买账；想在这里建立名声，得重新来过。
+
+**洗白是真实的博弈。** 玩家试图扭转既有恶名：公开辩白、行善积德、找出真凶——每种方式的社会效果按圈层、证据与传播条件裁定。恶名不会因为玩家宣布"我是冤枉的"就消失。
+
+**名号的分化。** 同一个人物，商队叫他"及时雨"，仇家叫他"笑面虎"。两个名号在两个圈层各自真实，互不覆盖。
+
+**历史恶名。** 十年前的血案至今仍被某个圈层记着。评价已经淡化但没有退役——当事人一露面，旧事就会被翻出来。淡化的速度由 GM 按世界节奏把握，不存在统一的衰减公式。
+
+**误判。** 玩家把客栈里的敬畏当作美名远播的证据，其实人们怕的是他身后那位沉默的同伴。让玩家按他相信的版本行动，直到真相浮出水面——不要提前替他纠正。
+
+**传说不等于能力。** 玩家顶着"天下第一剑"的名声，实际剑术早已生疏。名望机制只负责这个名声存在、传播、被相信；露馅的那一刻会发生什么，由具体事件裁定。
+
+**名望不遥控 NPC。** 玩家美名远播，但目标 NPC 因私人恩怨拒不合作。公共评价是上下文，不是通行证——NPC 的回应权永远完整。
+
+**数值缺席下的质感。** 整个名望系统不需要任何可见数值也能运转："这一带没人不认识他"与"只有几个老江湖还记得这个名字"，就是玩家需要的全部精度。
+
+---
+
+## 16. 相关资产
+
+- [[组织与任职核心_Expansion_Pack_v0.1.2]]
+- [[关系与恋爱核心_Expansion_Pack_v0.2]]
+- [[政治与公共权力核心_Expansion_Pack_v0.1]]
+
+---
+
+## Revision Notes
+
+v0.1（DSH-native 迁移）
+
+- 移除第二版 Runtime 专属结构与机器协议语言;
+- 改写为面向 GM 的纯资产文档;
+- 保留玩法机制与裁定参考深度。
