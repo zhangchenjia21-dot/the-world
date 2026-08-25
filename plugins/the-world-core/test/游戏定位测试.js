@@ -14,6 +14,9 @@ import {
   parseCurrentFields,
   normalizeControlMode,
   readSavePolicyInterval,
+  parseSavePolicy,
+  policyFingerprint,
+  describeSavePolicy,
   DEFAULT_CONTROL_MODE
 } from '../../shared/游戏定位.js'
 
@@ -159,4 +162,94 @@ test('readSavePolicyInterval：手动存档 / 文件缺失 / 非法数字都返�
   // 0 与负数不是有效间隔
   fs.writeFileSync(path.join(gameDir, 'COMPOSITION.md'), '- 每 0 玩家回合自动存档\n')
   assert.equal(readSavePolicyInterval(gameDir), null)
+})
+
+/** ── Save Policy v0.2：parseSavePolicy（任务 §2/§12-1~5）──────────────────── */
+
+test('parseSavePolicy：仅手动（§12-1）', () => {
+  assert.deepEqual(parseSavePolicy('- 策略: 仅手动存档；玩家可随时手动存档\n'), {
+    manual: true,
+    milestone: false,
+    interval: null
+  })
+  // 空文本 / 无策略段落 → 纯手动默认
+  assert.deepEqual(parseSavePolicy(''), { manual: true, milestone: false, interval: null })
+  assert.deepEqual(parseSavePolicy(null), { manual: true, milestone: false, interval: null })
+})
+
+test('parseSavePolicy：每 5 / 10 / 20 玩家回合（§12-2）', () => {
+  for (const n of [5, 10, 20]) {
+    const policy = parseSavePolicy(`- 策略: 每 ${n} 玩家回合自动存档；玩家可随时手动存档\n`)
+    assert.equal(policy.interval, n)
+    assert.equal(policy.milestone, false)
+    assert.equal(policy.manual, true)
+  }
+})
+
+test('parseSavePolicy：仅里程碑（§12-3）', () => {
+  const policy = parseSavePolicy('- 策略: 仅里程碑（重大阶段切换）自动存档；玩家可随时手动存档\n')
+  assert.equal(policy.milestone, true)
+  assert.equal(policy.interval, null)
+})
+
+test('parseSavePolicy：里程碑 + 定期混合（§12-4）', () => {
+  const policy = parseSavePolicy('- 策略: 里程碑 + 每 10 玩家回合自动存档；玩家可随时手动存档\n')
+  assert.equal(policy.milestone, true)
+  assert.equal(policy.interval, 10)
+})
+
+test('parseSavePolicy：乱世三国2 真实文本解析为 milestone-only（§2/§12-5）', () => {
+  // 从 games/luan-shi-sanguo-2/COMPOSITION.md 复制的存档策略段落原文（测试只复制文本，不改真实档）
+  const text = [
+    '## 存档策略',
+    '',
+    '- 策略: **仅重大阶段切换（里程碑）自动存档 + 玩家随时手动「存档」**',
+    '',
+    '- 里程碑: THREADS 大批量结算、势力归属变化、主角身份跃迁、重大时间跳跃',
+    '- 自动存档保留: 最近 5 个，超出滚动删除；手动存档永不自动删除',
+    ''
+  ].join('\n')
+  const policy = parseSavePolicy(text)
+  assert.equal(policy.milestone, true)
+  assert.equal(policy.interval, null, '不得把「最近 5 个」误判为每 5 玩家回合')
+})
+
+test('parseSavePolicy：乱世三国1 真实文本解析为里程碑 + 每 5（§8 兼容）', () => {
+  // 从 games/luan-shi-sanguo/COMPOSITION.md 复制的存档策略段落原文
+  const text = [
+    '## 存档策略',
+    '',
+    '- 策略: **每 5 玩家回合自动存档**（2026-08-24 架构迁移时玩家确认）',
+    '- 里程碑兜底: 重大阶段切换（THREADS 大批量结算、势力归属变化、主角身份跃迁）时，无论回合计数都自动建立存档',
+    '- 自动存档保留: 最近 5 个，超出滚动删除；**手动存档永不自动删除**（玩家随时可说「存档」）',
+    ''
+  ].join('\n')
+  const policy = parseSavePolicy(text)
+  assert.equal(policy.milestone, true)
+  assert.equal(policy.interval, 5)
+})
+
+test('policyFingerprint：策略差异产生不同指纹，同策略同指纹（§4）', () => {
+  const a = parseSavePolicy('- 策略: 每 5 玩家回合自动存档\n')
+  const b = parseSavePolicy('- 策略: 每 10 玩家回合自动存档\n')
+  const c = parseSavePolicy('- 策略: 里程碑 + 每 5 玩家回合自动存档\n')
+  assert.notEqual(policyFingerprint(a), policyFingerprint(b))
+  assert.notEqual(policyFingerprint(a), policyFingerprint(c))
+  assert.equal(policyFingerprint(a), policyFingerprint(parseSavePolicy('- 每 5 个玩家回合自动存档\n')))
+})
+
+test('describeSavePolicy：玩家可读中文摘要（§10 可选策略行）', () => {
+  assert.equal(describeSavePolicy({ manual: true, milestone: false, interval: null }), '仅手动存档')
+  assert.equal(
+    describeSavePolicy({ manual: true, milestone: false, interval: 10 }),
+    '每 10 玩家回合自动存档；玩家可随时手动存档'
+  )
+  assert.equal(
+    describeSavePolicy({ manual: true, milestone: true, interval: null }),
+    '仅里程碑（重大阶段切换）自动存档；玩家可随时手动存档'
+  )
+  assert.equal(
+    describeSavePolicy({ manual: true, milestone: true, interval: 20 }),
+    '里程碑 + 每 20 玩家回合自动存档；玩家可随时手动存档'
+  )
 })

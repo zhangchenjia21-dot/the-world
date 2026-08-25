@@ -352,6 +352,40 @@ runningFlag = false
 sessions.create = async ({ workspaceId } = {}) => { order.push(`create:${workspaceId}`); return 's-new' }
 sessions.open = async (id) => { order.push(`open:${id}`) }
 
+// ── Save Policy v0.2：策略摘要行 + 自动存档失败的非侵入式警告（§12-23/24，stub 应答）──
+// 放在存档页既有流程之后：本段会把 /saves 应答换成 stub，避免干扰上面捕获的存档卡节点。
+{
+  const liveFetch = globalThis.fetch
+  let savesPayload = {
+    game: { id: 'luan-shi-sanguo' },
+    saves: [],
+    policy: '里程碑 + 每 10 玩家回合自动存档；玩家可随时手动存档',
+    autoSaveError: '游戏工作区不完整，无法建立可恢复存档：缺少 story/LEDGER.md'
+  }
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).includes('/saves?')) return { json: async () => savesPayload }
+    return liveFetch(url, opts)
+  }
+  switchPage('overview')
+  switchPage('saves')
+  fullRender(el)
+  await new Promise((r) => setTimeout(r, 30))
+  if (dirty) { dirty = false; texts = fullRender(el) }
+  joined = texts.join('\n')
+  check('存档-策略摘要行显形（§12-23）', joined.includes('存档策略：里程碑 + 每 10 玩家回合'))
+  check('存档-自动存档失败警告显形（§12-23）', joined.includes('最近一次自动存档失败') && joined.includes('工作区不完整'))
+
+  // 下一次自动存档成功后服务端清掉错误：警告消失（§12-24）
+  savesPayload = { ...savesPayload, autoSaveError: null }
+  switchPage('overview')
+  switchPage('saves')
+  fullRender(el)
+  await new Promise((r) => setTimeout(r, 30))
+  if (dirty) { dirty = false; texts = fullRender(el) }
+  check('存档-错误清除后警告消失（§12-24）', !texts.join('\n').includes('最近一次自动存档失败'))
+  globalThis.fetch = liveFetch
+}
+
 // ── 第二 fixture（AC-9）：无机制、无 THREADS、不同世界与人物名 ──
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'twp-fixture2-'))
 try {

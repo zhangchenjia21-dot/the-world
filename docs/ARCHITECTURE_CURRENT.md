@@ -334,6 +334,11 @@ Persistent State 与 Save Point 明确分离：
 - Save 是显式可回滚 snapshot；
 - 自动存档策略在 New Game Setup 中由玩家确认并写入 `COMPOSITION.md`；
 - 自动档可滚动保留，手动档不自动删除；
+- 执行簿记（跨 Session 回合计数 / pending milestone / 最近自动存档失败）存于
+  `saves/POLICY_STATE.json`：machine-owned，不进 snapshot，Restore 不回滚，
+  策略指纹始终与当前 `COMPOSITION.md` 对齐（Save Policy v0.2）；
+- 里程碑信号由模型经 `world_mark_milestone` 发出，快照由确定性代码在归并完成后的
+  安全 seam 建立；同回合定期 + 里程碑同时触发只建一个 milestone 档（Save Policy v0.2）；
 - snapshot 默认覆盖 `COMPOSITION.md + state/ + mechanics/ + story/ + memory/`，不递归保存 `saves/`。
 
 ---

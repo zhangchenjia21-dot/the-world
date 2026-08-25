@@ -9,6 +9,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   REQUIRED_STRUCTURE,
+  POLICY_STATE_FILE,
   createSnapshot,
   inspectSave,
   listSaves,
@@ -16,7 +17,14 @@ import {
   resolveSaveDir,
   restoreSnapshot,
   sanitizeLabel,
-  withGameLock
+  sanitizeMilestoneLabel,
+  withGameLock,
+  readPolicyState,
+  syncPolicyState,
+  recordPlayerTurn,
+  markMilestone,
+  recordAutoSaveSuccess,
+  recordAutoSaveFailure
 } from './存档.js'
 
 function makeTempDir() {
@@ -329,4 +337,138 @@ test('Windows path / CRLF 不导致识别失败（§12.2-10）', () => {
   const bareInfo = inspectSave(bare)
   assert.equal(bareInfo.restorable, true)
   assert.equal(bareInfo.kind, 'auto-checkpoint')
+})
+
+/** ── Save Policy v0.2：POLICY_STATE.json 执行簿记（任务 §4/§5/§12）────────── */
+
+const 每5策略 = { manual: true, milestone: false, interval: 5 }
+const 仅里程碑策略 = { manual: true, milestone: true, interval: null }
+const 混合策略 = { manual: true, milestone: true, interval: 10 }
+const 手动策略 = { manual: true, milestone: false, interval: null }
+
+test('POLICY_STATE：缺失 / 损坏 / 版本不符都 fail-safe 返回 null（§4）', () => {
+  const gameDir = makeGameDir()
+  assert.equal(readPolicyState(gameDir), null)
+
+  const file = path.join(gameDir, 'saves', POLICY_STATE_FILE)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, '{ 这不是 JSON', 'utf8')
+  assert.equal(readPolicyState(gameDir), null)
+
+  fs.writeFileSync(file, JSON.stringify({ version: 99, totalPlayerTurns: 7 }), 'utf8')
+  assert.equal(readPolicyState(gameDir), null)
+})
+
+test('POLICY_STATE：sync 按当前策略安全初始化，不碰世界文件（§4）', () => {
+  const gameDir = makeGameDir()
+  const state = syncPolicyState(gameDir, 每5策略)
+  assert.equal(state.totalPlayerTurns, 0)
+  assert.equal(state.intervalProgress, 0)
+  assert.ok(state.policyFingerprint.includes('interval:5'))
+  // 落盘且可复读
+  assert.deepEqual(readPolicyState(gameDir), state)
+})
+
+test('recordPlayerTurn：每回合只 +1，到达间隔即 due（§5）', () => {
+  const gameDir = makeGameDir()
+  for (let turn = 1; turn <= 4; turn += 1) {
+    const { state, intervalDue } = recordPlayerTurn(gameDir, 每5策略)
+    assert.equal(state.totalPlayerTurns, turn)
+    assert.equal(intervalDue, false)
+  }
+  const fifth = recordPlayerTurn(gameDir, 每5策略)
+  assert.equal(fifth.intervalDue, true)
+  assert.equal(fifth.state.intervalProgress, 5)
+
+  // 无 interval 策略永不 due
+  const manual = makeGameDir()
+  assert.equal(recordPlayerTurn(manual, 手动策略).intervalDue, false)
+  assert.equal(recordPlayerTurn(manual, 仅里程碑策略).intervalDue, false)
+})
+
+test('policy 指纹变化：intervalProgress 清零、totalPlayerTurns 保留（§4/§12-19/20）', () => {
+  const gameDir = makeGameDir()
+  for (let turn = 0; turn < 4; turn += 1) recordPlayerTurn(gameDir, 每5策略)
+
+  // 玩家改策略：每 5 → 每 10
+  const changed = syncPolicyState(gameDir, { manual: true, milestone: false, interval: 10 })
+  assert.equal(changed.intervalProgress, 0)
+  assert.equal(changed.totalPlayerTurns, 4, '真实玩家交互计数不因策略改变回滚')
+
+  // 新策略下重新累计
+  assert.equal(recordPlayerTurn(gameDir, { manual: true, milestone: false, interval: 10 }).state.intervalProgress, 1)
+})
+
+test('policy 指纹变化：新策略不含 milestone 时清掉 pending milestone（§4）', () => {
+  const gameDir = makeGameDir()
+  recordPlayerTurn(gameDir, 混合策略)
+  markMilestone(gameDir, 混合策略, '升任屯长 · 暗查内坊')
+  assert.ok(readPolicyState(gameDir).pendingMilestone)
+
+  const cleared = syncPolicyState(gameDir, 每5策略)
+  assert.equal(cleared.pendingMilestone, null)
+
+  // 新策略仍含 milestone：pending 保留
+  const gameDir2 = makeGameDir()
+  recordPlayerTurn(gameDir2, 混合策略)
+  markMilestone(gameDir2, 混合策略, '绎幕侦巡完成')
+  const kept = syncPolicyState(gameDir2, 仅里程碑策略)
+  assert.equal(kept.pendingMilestone.label, '绎幕侦巡完成')
+})
+
+test('markMilestone：策略不含 milestone 时明确 ignored，不写文件（§6/§12-14）', () => {
+  const gameDir = makeGameDir()
+  recordPlayerTurn(gameDir, 每5策略)
+  const before = readPolicyState(gameDir)
+  const result = markMilestone(gameDir, 每5策略, '不该被记录')
+  assert.equal(result.marked, false)
+  assert.equal(result.reason, 'policy-without-milestone')
+  assert.deepEqual(readPolicyState(gameDir), before)
+})
+
+test('markMilestone：同一回合多次 signal 合并为一条（§6/§12-16）', () => {
+  const gameDir = makeGameDir()
+  recordPlayerTurn(gameDir, 仅里程碑策略)
+  const first = markMilestone(gameDir, 仅里程碑策略, '升任屯长')
+  const second = markMilestone(gameDir, 仅里程碑策略, '换个说法')
+  assert.equal(first.marked, true)
+  assert.equal(first.coalesced, false)
+  assert.equal(second.marked, true)
+  assert.equal(second.coalesced, true)
+  assert.equal(readPolicyState(gameDir).pendingMilestone.label, '升任屯长', '保留首个 label')
+})
+
+test('milestone label 清洗：换行 / 控制字符去除，截断 48 字，空标签拒绝（§6/§12-15）', () => {
+  assert.equal(sanitizeMilestoneLabel('升任屯长\n暗查内坊'), '升任屯长 暗查内坊')
+  assert.equal(sanitizeMilestoneLabel('a\0b\tc'), 'a b c')
+  assert.equal(sanitizeMilestoneLabel('  '), null)
+  assert.equal(sanitizeMilestoneLabel(null), null)
+  assert.equal(sanitizeMilestoneLabel('很长'.repeat(30)).length, 48)
+
+  const gameDir = makeGameDir()
+  recordPlayerTurn(gameDir, 仅里程碑策略)
+  assert.equal(markMilestone(gameDir, 仅里程碑策略, '\n\n').marked, false)
+})
+
+test('自动档失败记录 lastAutoSaveError；成功后清除并重置进度（§7/§12-24）', () => {
+  const gameDir = makeGameDir()
+  for (let turn = 0; turn < 5; turn += 1) recordPlayerTurn(gameDir, 每5策略)
+
+  const failed = recordAutoSaveFailure(gameDir, 每5策略, '游戏工作区不完整，无法建立可恢复存档：缺少 story/LEDGER.md')
+  assert.match(failed.lastAutoSaveError, /工作区不完整/)
+  assert.equal(failed.intervalProgress, 5, '失败不清零进度，下回合重试')
+
+  const succeeded = recordAutoSaveSuccess(gameDir, 每5策略)
+  assert.equal(succeeded.lastAutoSaveError, null)
+  assert.equal(succeeded.intervalProgress, 0)
+  assert.equal(succeeded.totalPlayerTurns, 5)
+})
+
+test('POLICY_STATE.json 不进入 snapshot（§4：执行簿记不是世界真相）', () => {
+  const gameDir = makeGameDir()
+  recordPlayerTurn(gameDir, 每5策略)
+  const save = createSnapshot(gameDir, { kind: 'manual', label: '检查簿记隔离' })
+  const saveDir = resolveSaveDir(gameDir, save.id)
+  assert.equal(fs.existsSync(path.join(saveDir, 'saves')), false)
+  assert.equal(fs.existsSync(path.join(saveDir, POLICY_STATE_FILE)), false)
 })

@@ -16,9 +16,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { apply, Config } from '../lib/index.js'
-import { REQUIRED_STRUCTURE, listSaves, resolveSaveDir } from '../../shared/存档.js'
+import { REQUIRED_STRUCTURE, listSaves, resolveSaveDir, readPolicyState } from '../../shared/存档.js'
 
-function 建夹具() {
+function 建夹具(policyLine = '- Save Policy: 每 5 玩家回合自动存档') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-smoke-'))
   const gameDir = path.join(root, 'games', 'three-kingdoms_001')
   for (const relative of REQUIRED_STRUCTURE) {
@@ -30,7 +30,7 @@ function 建夹具() {
     '# Game Composition',
     '- World: 乱世三国',
     '- Control Mode: full-control',
-    '- Save Policy: 每 5 玩家回合自动存档',
+    policyLine,
     '- 确认状态: confirmed'
   ].join('\n'))
   fs.writeFileSync(path.join(gameDir, 'state', 'CURRENT.md'), [
@@ -48,20 +48,22 @@ function 建夹具() {
   return { root, gameDir }
 }
 
-/** 最小 cordis ctx stub：只实现 apply 用到的四个面。 */
+/** 最小 cordis ctx stub：实现 apply 用到的面（含 tools 服务软取与 logger.debug）。 */
 function 建StubCtx() {
   const sections = []
   const contexts = []
   const listeners = new Map()
+  const tools = { registered: [], register(def) { this.registered.push(def); return () => {} } }
   const ctx = {
     systemPrompt: {
       section(section) { sections.push(section); return () => {} },
       context(context) { contexts.push(context); return () => {} }
     },
     on(event, fn) { listeners.set(event, fn); return () => {} },
-    logger() { return { warn() {} } }
+    get(name) { return name === 'tools' ? tools : null },
+    logger() { return { warn() {}, debug() {} } }
   }
-  return { ctx, sections, contexts, listeners }
+  return { ctx, sections, contexts, listeners, tools }
 }
 
 function 建StubAgent(cwd) {
@@ -237,4 +239,214 @@ test('动态 context：玩家改完 CURRENT.md 的 Control mode 后下一轮立�
   fs.writeFileSync(path.join(gameDir, 'state', 'CURRENT.md'),
     '# Current Game State\n- Control mode: narrative-delegation\n')
   assert.match(contexts[0].text({ agent }), /narrative-delegation/)
+})
+
+/** ── Save Policy v0.2（任务 §5/§6/§8/§12）────────────────────────────────── */
+
+const 里程碑策略行 = '- 策略: 仅里程碑（重大阶段切换）自动存档；玩家可随时手动存档'
+const 混合策略行 = '- 策略: 里程碑 + 每 5 玩家回合自动存档；玩家可随时手动存档'
+
+function 触发(listeners, agent, turn, aborted = false) {
+  listeners.get('agent/turn-stopping')({ agent, turn, signal: { aborted } })
+}
+
+function 里程碑工具(harness) {
+  const tool = harness.tools.registered.find((t) => t.name === 'world_mark_milestone')
+  assert.ok(tool, 'world_mark_milestone 必须注册到 tools 服务')
+  return tool
+}
+
+test('apply 把 world_mark_milestone 注册到 tools 服务（§6 seam）', () => {
+  const harness = 装配()
+  const tool = 里程碑工具(harness)
+  assert.equal(tool.parameters.required.includes('label'), true)
+  assert.equal(typeof tool.execute, 'function')
+})
+
+test('跨 Session：Session A 4 回合 + Session B 1 回合，在每 5 策略下产生自动档（§12-6）', () => {
+  const { root, gameDir } = 建夹具() // 每 5 玩家回合
+  // Session A：4 个完整回合（first + second stopping）
+  const harnessA = 装配()
+  const agentA = 建StubAgent(root)
+  for (const turn of [1, 2, 3, 4]) {
+    触发(harnessA.listeners, agentA, turn)
+    触发(harnessA.listeners, agentA, turn)
+  }
+  assert.equal(listSaves(gameDir).length, 0)
+  assert.equal(readPolicyState(gameDir).totalPlayerTurns, 4)
+
+  // Session B：新 agent、新 apply（进程内 WeakMap 全空），权威计数来自 POLICY_STATE.json
+  const harnessB = 装配()
+  const agentB = 建StubAgent(root)
+  触发(harnessB.listeners, agentB, 1)
+  assert.match(文本(agentB.steered[0]), /检查点归并/)
+  assert.equal(listSaves(gameDir).length, 0, '归并完成前不得建档')
+  触发(harnessB.listeners, agentB, 1)
+  const saves = listSaves(gameDir)
+  assert.equal(saves.length, 1)
+  assert.equal(saves[0].kind, 'auto-checkpoint')
+  assert.equal(saves[0].label, '第 5 玩家回合自动存档')
+})
+
+test('maintenance second stopping 不重复计数（§12-7）', () => {
+  const { root, gameDir } = 建夹具()
+  const { listeners } = 装配()
+  const agent = 建StubAgent(root)
+  触发(listeners, agent, 1)
+  触发(listeners, agent, 1)
+  触发(listeners, agent, 1)
+  assert.equal(readPolicyState(gameDir).totalPlayerTurns, 1)
+})
+
+test('aborted turn 不计数也不建档（§12-8）', () => {
+  const { root, gameDir } = 建夹具()
+  const { listeners } = 装配()
+  const agent = 建StubAgent(root)
+  for (const turn of [1, 2, 3, 4]) 触发(listeners, agent, turn)
+  触发(listeners, agent, 5, true) // 第 5 回合被 abort
+  assert.equal(readPolicyState(gameDir).totalPlayerTurns, 4)
+  assert.equal(listSaves(gameDir).length, 0)
+})
+
+test('interval：成功重置 progress，第 10 回合再次出档（§12-11）', () => {
+  const { root, gameDir } = 建夹具()
+  const { listeners } = 装配()
+  const agent = 建StubAgent(root)
+  const 回合 = (turn) => { 触发(listeners, agent, turn); 触发(listeners, agent, turn) }
+  for (const turn of [1, 2, 3, 4]) 回合(turn)
+  回合(5)
+  assert.equal(listSaves(gameDir).length, 1)
+  assert.equal(readPolicyState(gameDir).intervalProgress, 0, '成功后 progress 重置')
+
+  for (const turn of [6, 7, 8, 9]) 回合(turn)
+  assert.equal(listSaves(gameDir).length, 1, 'due 前不再 snapshot（§12-9）')
+  回合(10)
+  const saves = listSaves(gameDir)
+  assert.equal(saves.length, 2)
+  assert.equal(saves[1].label, '第 10 玩家回合自动存档')
+})
+
+test('interval：snapshot 失败不清进度、记录错误，下一安全回合重试并成功（§12-12/24）', () => {
+  const { root, gameDir } = 建夹具()
+  const { listeners } = 装配()
+  const agent = 建StubAgent(root)
+  for (const turn of [1, 2, 3, 4]) { 触发(listeners, agent, turn); 触发(listeners, agent, turn) }
+
+  触发(listeners, agent, 5) // first stopping：steer 归并
+  // 模拟归并 step 出岔：工作区缺 story/LEDGER.md，snapshot 必然 workspace-incomplete
+  const ledger = path.join(gameDir, 'story', 'LEDGER.md')
+  const ledgerBackup = fs.readFileSync(ledger, 'utf8')
+  fs.rmSync(ledger)
+  触发(listeners, agent, 5) // second stopping：建档失败
+  assert.equal(listSaves(gameDir).length, 0)
+  const failed = readPolicyState(gameDir)
+  assert.match(failed.lastAutoSaveError, /工作区不完整/)
+  assert.equal(failed.intervalProgress, 5, '失败不清零进度')
+
+  // 修复工作区，下一回合重试
+  fs.writeFileSync(ledger, ledgerBackup, 'utf8')
+  触发(listeners, agent, 6)
+  assert.match(文本(agent.steered[agent.steered.length - 1]), /检查点归并/, '进度仍 due：再次 steer 归并')
+  触发(listeners, agent, 6)
+  assert.equal(listSaves(gameDir).length, 1)
+  const recovered = readPolicyState(gameDir)
+  assert.equal(recovered.lastAutoSaveError, null, '成功后清除错误')
+  assert.equal(recovered.intervalProgress, 0)
+})
+
+test('milestone：GM step 里 signal → 本回合升级归并 → second stopping 建 milestone 档（§12-13）', () => {
+  const { root, gameDir } = 建夹具(里程碑策略行)
+  const harness = 装配()
+  const agent = 建StubAgent(root)
+  const tool = 里程碑工具(harness)
+
+  // GM step 中识别到重大阶段切换，发出 signal（不建快照、不动世界文件）
+  const marked = tool.execute({ label: '升任屯长 · 暗查内坊' }, { agent })
+  assert.equal(marked.marked, true)
+  assert.equal(listSaves(gameDir).length, 0)
+
+  触发(harness.listeners, agent, 1)
+  assert.match(文本(agent.steered[0]), /检查点归并/, 'pending milestone 把本回合升级为归并')
+  触发(harness.listeners, agent, 1)
+  const saves = listSaves(gameDir)
+  assert.equal(saves.length, 1)
+  assert.equal(saves[0].kind, 'milestone')
+  assert.equal(saves[0].label, '升任屯长 · 暗查内坊')
+
+  const state = readPolicyState(gameDir)
+  assert.equal(state.pendingMilestone, null, '成功后清掉 pending milestone')
+  assert.equal(state.lastAutoSaveError, null)
+})
+
+test('milestone：maintenance review 中才 signal → second stopping 读簿记建档（§8.2）', () => {
+  const { root, gameDir } = 建夹具(里程碑策略行)
+  const harness = 装配()
+  const agent = 建StubAgent(root)
+  const tool = 里程碑工具(harness)
+
+  触发(harness.listeners, agent, 1) // first stopping：无 pending → 普通维护，且含里程碑指引
+  assert.match(文本(agent.steered[0]), /回合维护/)
+  assert.match(文本(agent.steered[0]), /world_mark_milestone/)
+  tool.execute({ label: '绎幕侦巡完成' }, { agent }) // maintenance step 里 signal
+  触发(harness.listeners, agent, 1) // second stopping：maintenance 已完成，读簿记建档
+  const saves = listSaves(gameDir)
+  assert.equal(saves.length, 1)
+  assert.equal(saves[0].kind, 'milestone')
+  assert.equal(saves[0].label, '绎幕侦巡完成')
+})
+
+test('milestone：无里程碑策略时 signal 被 ignored，second stopping 不建档（§12-14）', () => {
+  const { root, gameDir } = 建夹具() // 每 5 玩家回合（无里程碑）
+  const harness = 装配()
+  const agent = 建StubAgent(root)
+  const tool = 里程碑工具(harness)
+  const result = tool.execute({ label: '不该成立' }, { agent })
+  assert.equal(result.marked, false)
+  assert.equal(result.reason, 'policy-without-milestone')
+  触发(harness.listeners, agent, 1)
+  assert.doesNotMatch(文本(agent.steered[0]), /world_mark_milestone/, '无里程碑策略的维护文案不提工具')
+  触发(harness.listeners, agent, 1)
+  assert.equal(listSaves(gameDir).length, 0)
+})
+
+test('milestone：未 confirmed 游戏 signal 被拒绝（§6 confirmed 门）', () => {
+  const { root, gameDir } = 建夹具(里程碑策略行)
+  fs.writeFileSync(path.join(gameDir, 'COMPOSITION.md'), '# Game Composition\n- World: 乱世三国\n')
+  const harness = 装配()
+  const agent = 建StubAgent(root)
+  const tool = 里程碑工具(harness)
+  const result = tool.execute({ label: '草稿阶段' }, { agent })
+  assert.equal(result.marked, false)
+  assert.equal(result.reason, 'not-a-confirmed-game')
+  assert.equal(readPolicyState(gameDir), null, '不得为未确认游戏创建簿记')
+})
+
+test('hybrid：interval due 与 milestone 同 turn 只建一个 milestone 档并重置进度（§8.3/§12-17/18）', () => {
+  const { root, gameDir } = 建夹具(混合策略行) // 里程碑 + 每 5
+  const harness = 装配()
+  const agent = 建StubAgent(root)
+  const tool = 里程碑工具(harness)
+  for (const turn of [1, 2, 3, 4]) { 触发(harness.listeners, agent, turn); 触发(harness.listeners, agent, turn) }
+  assert.equal(listSaves(gameDir).length, 0)
+
+  tool.execute({ label: '加入刘备义军' }, { agent }) // 第 5 回合 GM step 里 signal
+  触发(harness.listeners, agent, 5)
+  触发(harness.listeners, agent, 5)
+  const saves = listSaves(gameDir)
+  assert.equal(saves.length, 1, '同 turn 不重复建档')
+  assert.equal(saves[0].kind, 'milestone', '里程碑语义优先于 auto-checkpoint')
+  assert.equal(saves[0].label, '加入刘备义军')
+  const state = readPolicyState(gameDir)
+  assert.equal(state.intervalProgress, 0, 'milestone 档同样视为定期安全点已满足')
+  assert.equal(state.totalPlayerTurns, 5)
+})
+
+test('hybrid：普通回合既不 due 也无 milestone，只维护不建档（§14 验收）', () => {
+  const { root, gameDir } = 建夹具(混合策略行)
+  const harness = 装配()
+  const agent = 建StubAgent(root)
+  触发(harness.listeners, agent, 1)
+  触发(harness.listeners, agent, 1)
+  assert.equal(listSaves(gameDir).length, 0)
+  assert.match(文本(agent.steered[0]), /回合维护/)
 })

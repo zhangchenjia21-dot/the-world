@@ -1,6 +1,7 @@
 ---
 title: The World｜Save Policy v0.2
-status: current-save-policy-design
+status: implemented
+implemented: 2026-08-25（见 docs/experiments/SAVE_POLICY_V0_2_KIMICODE_TASK_2026-08-25.md 报告）
 version: 0.2
 updated: 2026-08-25
 scope: post-Gate-B save policy semantics
