@@ -10,7 +10,7 @@
  */
 import fs from 'node:fs'
 import path from 'node:path'
-import { readGameDynamics } from './游戏定位.js'
+import { readGameDynamics, policyFingerprint } from './游戏定位.js'
 
 export const SNAPSHOT_ENTRIES = ['COMPOSITION.md', 'state', 'mechanics', 'story', 'memory']
 
@@ -422,4 +422,155 @@ export function withGameLock(gameDir, fn) {
   } finally {
     gameLocks.delete(key)
   }
+}
+
+/** ── Save Policy v0.2：POLICY_STATE.json 执行簿记 ───────────────────────────
+ *
+ * saves/POLICY_STATE.json 是 Save subsystem 自己的 machine-owned state：
+ * - 由这里的确定性代码独占读写，Agent / 模型不直接维护；
+ * - 位于 saves/ 下，天然不进入 snapshot（快照只复制 SNAPSHOT_ENTRIES）；
+ * - Restore 不回滚它：恢复后下一次 sync 以 live COMPOSITION.md 的策略为准；
+ * - 文件缺失 / 损坏都按 null 处理，随后从当前 COMPOSITION.md 安全重建。
+ */
+export const POLICY_STATE_FILE = 'POLICY_STATE.json'
+const POLICY_STATE_VERSION = 1
+const MILESTONE_LABEL_MAX = 48
+
+function policyStatePath(gameDir) {
+  return path.join(gameDir, 'saves', POLICY_STATE_FILE)
+}
+
+function emptyPolicyState() {
+  return {
+    version: POLICY_STATE_VERSION,
+    policyFingerprint: null,
+    totalPlayerTurns: 0,
+    intervalProgress: 0,
+    pendingMilestone: null,
+    lastAutoSaveError: null
+  }
+}
+
+/** 读取执行簿记；缺失、损坏、版本不符一律返回 null（fail-safe，调用方负责重建）。 */
+export function readPolicyState(gameDir) {
+  let raw
+  try {
+    raw = fs.readFileSync(policyStatePath(gameDir), 'utf8')
+  } catch {
+    return null
+  }
+  try {
+    const data = JSON.parse(raw)
+    if (!data || data.version !== POLICY_STATE_VERSION) return null
+    const state = emptyPolicyState()
+    state.policyFingerprint = typeof data.policyFingerprint === 'string' ? data.policyFingerprint : null
+    state.totalPlayerTurns = Number.isSafeInteger(data.totalPlayerTurns) && data.totalPlayerTurns > 0 ? data.totalPlayerTurns : 0
+    state.intervalProgress = Number.isSafeInteger(data.intervalProgress) && data.intervalProgress > 0 ? data.intervalProgress : 0
+    if (data.pendingMilestone && typeof data.pendingMilestone.label === 'string') {
+      state.pendingMilestone = {
+        label: data.pendingMilestone.label,
+        atTurn: Number.isSafeInteger(data.pendingMilestone.atTurn) ? data.pendingMilestone.atTurn : 0
+      }
+    }
+    state.lastAutoSaveError = typeof data.lastAutoSaveError === 'string' ? data.lastAutoSaveError : null
+    return state
+  } catch {
+    return null
+  }
+}
+
+/** 原子写入：tmp + rename，避免半写状态被下一轮读到。 */
+function writePolicyState(gameDir, state) {
+  const savesDir = path.join(gameDir, 'saves')
+  fs.mkdirSync(savesDir, { recursive: true })
+  const tmp = path.join(savesDir, `.POLICY_STATE.${process.pid}.tmp`)
+  fs.writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, 'utf8')
+  fs.renameSync(tmp, policyStatePath(gameDir))
+}
+
+/**
+ * 让执行簿记与当前 COMPOSITION.md 策略对齐（每次访问前置）：
+ * - 缺失 / 损坏 → 按当前策略新建；
+ * - 指纹不一致（玩家改策略或 Restore 回旧策略）→ intervalProgress 清零、
+ *   totalPlayerTurns 保留、新策略不含 milestone 时清掉 pending milestone、更新指纹。
+ */
+export function syncPolicyState(gameDir, policy) {
+  const fingerprint = policyFingerprint(policy)
+  const existing = readPolicyState(gameDir)
+  if (!existing) {
+    const state = emptyPolicyState()
+    state.policyFingerprint = fingerprint
+    writePolicyState(gameDir, state)
+    return state
+  }
+  if (existing.policyFingerprint !== fingerprint) {
+    existing.intervalProgress = 0
+    if (!policy.milestone) existing.pendingMilestone = null
+    existing.policyFingerprint = fingerprint
+    writePolicyState(gameDir, existing)
+  }
+  return existing
+}
+
+/**
+ * 记录一个真实玩家回合（每回合只在 first stopping 调一次）。
+ * 返回 { state, intervalDue }：intervalProgress 达到策略间隔即 due。
+ * 没有 interval 策略时 intervalDue 恒为 false。
+ */
+export function recordPlayerTurn(gameDir, policy) {
+  const state = syncPolicyState(gameDir, policy)
+  state.totalPlayerTurns += 1
+  state.intervalProgress += 1
+  const intervalDue = policy.interval != null && state.intervalProgress >= policy.interval
+  writePolicyState(gameDir, state)
+  return { state, intervalDue }
+}
+
+/** 里程碑 label 清洗：去换行 / 控制字符，折叠空白，截断到 48 字（玩家可见）。 */
+export function sanitizeMilestoneLabel(raw) {
+  if (!raw || typeof raw !== 'string') return null
+  const cleaned = raw.replace(/[\0-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MILESTONE_LABEL_MAX)
+  return cleaned || null
+}
+
+/**
+ * world_mark_milestone 的唯一写口：只把 pending milestone 记进簿记。
+ * 不建快照、不动世界文件。同一回合多次 mark 合并为一条（保留首个 label）。
+ * 策略不含 milestone 时明确 ignored。
+ */
+export function markMilestone(gameDir, policy, label) {
+  if (!policy.milestone) return { marked: false, reason: 'policy-without-milestone' }
+  const safeLabel = sanitizeMilestoneLabel(label)
+  if (!safeLabel) return { marked: false, reason: 'empty-label' }
+  const state = syncPolicyState(gameDir, policy)
+  if (state.pendingMilestone && state.pendingMilestone.atTurn === state.totalPlayerTurns) {
+    return { marked: true, coalesced: true, label: state.pendingMilestone.label }
+  }
+  state.pendingMilestone = { label: safeLabel, atTurn: state.totalPlayerTurns }
+  writePolicyState(gameDir, state)
+  return { marked: true, coalesced: false, label: safeLabel }
+}
+
+/**
+ * 自动快照成功：清 pending milestone、重置 intervalProgress
+ * （milestone 档同样视为 interval 安全点已满足）、清除失败记录。
+ */
+export function recordAutoSaveSuccess(gameDir, policy) {
+  const state = syncPolicyState(gameDir, policy)
+  state.pendingMilestone = null
+  state.intervalProgress = 0
+  state.lastAutoSaveError = null
+  writePolicyState(gameDir, state)
+  return state
+}
+
+/**
+ * 自动快照失败：记录 lastAutoSaveError 供 Panel 显形；
+ * 不清零 intervalProgress、不丢 pending milestone——下一安全回合重试。
+ */
+export function recordAutoSaveFailure(gameDir, policy, message) {
+  const state = syncPolicyState(gameDir, policy)
+  state.lastAutoSaveError = String(message ?? '未知错误').slice(0, 200)
+  writePolicyState(gameDir, state)
+  return state
 }

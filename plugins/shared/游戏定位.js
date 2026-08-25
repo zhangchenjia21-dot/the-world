@@ -143,16 +143,56 @@ export function readCompositionStatus(gameDir) {
 }
 
 const SAVE_INTERVAL_PATTERN = /每\s*(\d+)\s*(?:个)?玩家回合/
+const MILESTONE_PATTERN = /里程碑|重大阶段切换/
+
+/**
+ * Save Policy v0.2：从 COMPOSITION.md 文本解析玩家确认过的存档策略。
+ * COMPOSITION.md 是策略真相源；这里只做宽容识别，不做大型 schema：
+ * - `每 N 玩家回合` → interval（N > 0 才有效）；
+ * - `里程碑` / `重大阶段切换` → milestone；
+ * - 两者同时出现 → 混合策略；都没有 → 纯手动。
+ * manual 恒为 true：任何策略下玩家都可以随时手动存档。
+ */
+export function parseSavePolicy(compositionText) {
+  const policy = { manual: true, milestone: false, interval: null }
+  if (!compositionText) return policy
+  const match = SAVE_INTERVAL_PATTERN.exec(compositionText)
+  if (match) {
+    const n = Number.parseInt(match[1], 10)
+    if (Number.isFinite(n) && n > 0) policy.interval = n
+  }
+  if (MILESTONE_PATTERN.test(compositionText)) policy.milestone = true
+  return policy
+}
+
+/** 读取当前游戏的 Save Policy；无 COMPOSITION.md 时返回纯手动默认。 */
+export function readSavePolicy(gameDir) {
+  const composition = readBounded(path.join(gameDir, COMPOSITION_FILE), 65536)
+  return parseSavePolicy(composition?.text)
+}
+
+/**
+ * 策略指纹：用于检测 COMPOSITION.md 的策略被玩家修改或被 Restore 换回。
+ * 指纹变化时执行侧重置 intervalProgress、保留 totalPlayerTurns。
+ */
+export function policyFingerprint(policy) {
+  return `v1|milestone:${policy.milestone ? 1 : 0}|interval:${policy.interval ?? 0}`
+}
+
+/** 玩家可读的策略摘要（Panel 存档页展示用）。 */
+export function describeSavePolicy(policy) {
+  let text
+  if (policy.milestone && policy.interval) text = `里程碑 + 每 ${policy.interval} 玩家回合自动存档`
+  else if (policy.milestone) text = '仅里程碑（重大阶段切换）自动存档'
+  else if (policy.interval) text = `每 ${policy.interval} 玩家回合自动存档`
+  else text = '仅手动存档'
+  return policy.milestone || policy.interval ? `${text}；玩家可随时手动存档` : text
+}
 
 /**
  * 从 COMPOSITION.md 解析自动存档间隔（每 N 玩家回合）。
  * 手动存档或无法解析时返回 null——调用方使用自己的默认节奏。
  */
 export function readSavePolicyInterval(gameDir) {
-  const composition = readBounded(path.join(gameDir, COMPOSITION_FILE), 65536)
-  if (!composition) return null
-  const match = SAVE_INTERVAL_PATTERN.exec(composition.text)
-  if (!match) return null
-  const n = Number.parseInt(match[1], 10)
-  return Number.isFinite(n) && n > 0 ? n : null
+  return readSavePolicy(gameDir).interval
 }
