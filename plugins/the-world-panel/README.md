@@ -18,8 +18,9 @@ Gate B 首个 RPG 体验插件：DSH Web 侧边栏中的玩家信息界面，以
 行囊    玩家装备 + 机制仓库类分节的跨 Owner 聚合
 事务    THREADS 按 紧急/进行中/长期 分组 + 系统任务组，保留两步确认归档
 系统    仅当本局存在长期机制时显示（机制显示名 + 状态 + 分节）
-存档    Save / Restore v0.1 + Save Policy v0.2：手动快照 + 存档列表（类型/游戏内时点/兼容性）+
-        两步确认恢复；恢复后强制进入恢复后出生的全新 Session；页首显示当前存档策略摘要，
+存档    Save / Restore + Save Policy v0.2 + Restore Reliability v0.2：手动快照 + 存档列表（类型/游戏内时点/
+        兼容性，以服务端 exact ref 定位）+ 两步确认恢复；恢复成功立即锁定全页成功态，随后强制进入恢复后
+        出生的全新 Session；恢复前保护档收进「恢复保护（系统）」折叠区；页首显示当前存档策略摘要，
         最近一次自动存档失败以非侵入式警告显形（不污染 RPG Chat）
 ```
 
@@ -46,14 +47,20 @@ canonical 状态词如 `active/open` 在显示层本地化为中文）。
 - **快照内容**：`COMPOSITION.md` + `state/` `mechanics/` `story/` `memory/`；永不复制 `saves/`、`library/`；
 - **可恢复判定（v0.2 结构）**：缺关键 Owner 文件的旧档仍可浏览，但标记「旧版归档」并禁用恢复，
   不偷偷补结构；
-- **恢复前保护**：任何 restore 修改 live state 之前先自动建立 `pre-restore` 保护档；保护档创建失败则
-  整个 restore 失败、不动 live；
+- **exact ref 定位（Restore Reliability v0.2）**：玩家显示编号（SAVE-NN）可能因历史脏数据重复，
+  不再兼任存储主键；`/saves` 为每个快照给出服务端枚举的 exact ref（目录 basename），`/restore`
+  按 ref 精确恢复；旧 `saveId` 请求只在编号唯一时兼容解析，duplicate 返回 `save-id-ambiguous` fail closed；
+- **恢复前保护**：任何 restore 修改 live state 之前先自动建立保护档，放进 `saves/recovery/` 系统
+  namespace（`PRE-RESTORE-*`，不占玩家 SAVE 编号、不进主列表，滚动保留最近 3 份）；保护档创建失败则
+  整个 restore 失败、不动 live；restore 中途失败但回滚完整时删除本次保护档，回滚不完整则保留全部
+  恢复材料并 fail loud（Restore Reliability v0.2）；
 - **真正 snapshot 语义**：恢复是整体替换，不是“覆盖存档里有的文件”——存档时点之后才出现的
   live 文件会被移除；失败时从备份回滚并 fail loud；
 - **idle 门槛**：Agent 生成中保存/恢复都被拒绝（client UX guard + host 侧 `agents` 状态权威检查）；
-- **fresh-session 边界**：restore 成功后客户端用 `ctx.sessions.create({ workspaceId })` 显式创建
-  恢复后出生的全新 Session 并 `open` 切换；seam 不可用时进入显眼的「必须新建会话」态，
-  绝不假装旧 Session 可继续（旧 Session 历史不改写、不删除）。
+- **fresh-session 边界**：restore 成功响应带 exact target（restoredRef/Id/Label/GameTime），客户端
+  立刻锁成全页「世界已恢复至…」成功态（不再暴露任何 Restore 按钮），随后用
+  `ctx.sessions.create({ workspaceId })` 显式创建恢复后出生的全新 Session 并 `open` 切换；
+  seam 不可用时进入显眼的「必须新建会话」态，绝不假装旧 Session 可继续（旧 Session 历史不改写、不删除）。
 
 ## 结构
 
@@ -62,10 +69,11 @@ lib/index.js            Node 半（手维护 ESM 源码）：/the-world/panel �
                         ├─ state        GET  → 分页 JSON 投影（含 CURRENT.md）
                         ├─ events       GET  → SSE（fs.watch 驱动，回合结束后刷新；无轮询）
                         ├─ close-thread POST → 线程归档（DEC-B3 v1.2 窄写口）
-                        ├─ saves        GET  → 存档列表元数据（兼容性判定，无真实路径）
-                        │                    + 当前存档策略中文摘要 + 最近一次自动存档失败（若有）
-                        ├─ save         POST → 手动确定性快照（label 清洗、编号服务端生成）
-                        └─ restore      POST → 快照回档（保护档先行 + 回滚安全 + fresh-session）
+                        ├─ saves        GET  → 存档列表元数据（exact ref + 兼容性判定，无真实路径）
+                        │                    + 恢复保护（系统）折叠区数据 + 当前存档策略中文摘要
+                        │                    + 最近一次自动存档失败（若有）
+                        ├─ save         POST → 手动确定性快照（label 清洗、编号扫描全部 SAVE 前缀目录生成）
+                        └─ restore      POST → 快照回档（saveRef 精确定位 + 保护档先行 + 回滚安全 + fresh-session）
 lib/线程归档.js          归档纯函数（THREADS 切块 / LEDGER 追加；CRLF 兼容）
 src/client/viewmodel.js 玩家视图模型层（纯函数：跨 Owner 聚合 / 清洗 / 分组；无 react 依赖）
 src/client/index.jsx    浏览器半：唯一接触 ctx.betterSidebar 的适配模块 + 渲染组件

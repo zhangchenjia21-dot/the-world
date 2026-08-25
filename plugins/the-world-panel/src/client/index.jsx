@@ -451,6 +451,9 @@ const SAVE_ERROR_TEXT = {
   'agent-running': '正在生成中——等这一回合结束后再保存或恢复',
   busy: '有存档操作正在进行，请稍后再试',
   'invalid-save-id': '存档标识非法',
+  'invalid-save-ref': '存档引用非法',
+  'save-ref-not-found': '该存档已不存在（可能已被移除）',
+  'save-id-ambiguous': '存在多个同编号存档，请刷新列表后重试',
   'save-not-found': '存档不存在（可能已被移除）',
   'save-incompatible': '该存档是旧版归档，当前版本不可直接恢复',
   'restore-failed': '恢复失败，已回滚到恢复前状态',
@@ -493,12 +496,13 @@ async function enterFreshSessionAfterRestore(ctx, scope) {
  */
 function SavesPanel({ scope, ctx, gameTime }) {
   const [saves, setSaves] = useState(null)
+  const [protections, setProtections] = useState([])
   const [policy, setPolicy] = useState(null)
   const [autoSaveError, setAutoSaveError] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [label, setLabel] = useState('')
-  const [confirmId, setConfirmId] = useState(null)
+  const [confirmRef, setConfirmRef] = useState(null)
   const [restored, setRestored] = useState(null)
 
   const running = Boolean(ctx?.sessions?.list?.getSnapshot?.()?.byId?.[scope?.sessionId]?.running)
@@ -508,6 +512,7 @@ function SavesPanel({ scope, ctx, gameTime }) {
       .then((r) => r.json())
       .then((d) => {
         setSaves(d?.saves ?? [])
+        setProtections(d?.protections ?? [])
         setPolicy(d?.policy ?? null)
         setAutoSaveError(d?.autoSaveError ?? null)
         setError(null)
@@ -540,14 +545,16 @@ function SavesPanel({ scope, ctx, gameTime }) {
       })
   }
 
-  const restoreNow = (saveId) => {
+  // Restore Reliability v0.2：恢复目标用 exact ref——玩家显示编号可能重复（duplicate SAVE-NN），
+  // React key / confirm target / 请求体统一用服务端枚举的 ref（§4）。
+  const restoreNow = (save) => {
     setBusy(true)
     setError(null)
-    setConfirmId(null)
+    setConfirmRef(null)
     fetch(savesUrl(scope).replace('/saves?', '/restore?'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ saveId })
+      body: JSON.stringify({ saveRef: save.ref })
     })
       .then((r) => r.json())
       .then(async (r) => {
@@ -556,14 +563,21 @@ function SavesPanel({ scope, ctx, gameTime }) {
           setError(saveErrorText(r, '恢复失败'))
           return
         }
+        // §8：文件层已恢复成功，立刻锁成全页中间态——即使 Session 切换要数秒，
+        // 玩家也必须知道 restore 已成功，且无法通过重复点击再次执行 Restore。
+        setRestored({ switching: true, label: r.restoredLabel ?? save.label, gameTime: r.restoredGameTime ?? save.gameTime })
         // restore 已成功：旧 Session 含有「未来历史」，必须换到恢复后出生的新 Session
         try {
           const result = await enterFreshSessionAfterRestore(ctx, scope)
           setBusy(false)
-          setRestored(result.requiresNewSession ? { requiresNewSession: true } : { switched: true })
+          setRestored((current) =>
+            result.requiresNewSession
+              ? { ...current, switching: false, requiresNewSession: true }
+              : { ...current, switching: false, switched: true }
+          )
         } catch {
           setBusy(false)
-          setRestored({ requiresNewSession: true })
+          setRestored((current) => ({ ...current, switching: false, requiresNewSession: true }))
         }
       })
       .catch((e) => {
@@ -572,23 +586,30 @@ function SavesPanel({ scope, ctx, gameTime }) {
       })
   }
 
-  // 恢复完成态：最显眼。自动切换失败时绝不显示成「可继续聊天」（B18）。
+  // 恢复完成态：全页替换、最显眼，不再暴露任何 Restore 按钮（§8/§10）。
   if (restored) {
     return h(
       'div',
       { className: 'twp-restored' },
       h('div', { className: 'twp-restored-title' }, '恢复完成'),
-      restored.requiresNewSession
-        ? h(
-            'div',
-            { className: 'twp-restored-warn' },
-            '当前聊天包含恢复点之后的未来历史，不能继续——请在左侧工作区新建会话再继续游戏。'
-          )
-        : h('div', null, '已切换到恢复后出生的全新会话，可以继续游戏。')
+      h(
+        'div',
+        { className: 'twp-restored-target' },
+        `世界已恢复至：${restored.label}${restored.gameTime ? `（${restored.gameTime}）` : ''}`
+      ),
+      restored.switching
+        ? h('div', null, '正在进入恢复后的新会话……')
+        : restored.requiresNewSession
+          ? h(
+              'div',
+              { className: 'twp-restored-warn' },
+              '世界文件已经成功回档。自动进入新会话失败；当前聊天仍含有回档后的「未来历史」，不能继续使用。请在当前工作区新建会话后继续。'
+            )
+          : h('div', null, '已切换到恢复后出生的全新会话，可以继续游戏。')
     )
   }
 
-  const confirmTarget = confirmId ? (saves ?? []).find((s) => s.id === confirmId) : null
+  const confirmTarget = confirmRef ? (saves ?? []).find((s) => s.ref === confirmRef) : null
   return h(
     'div',
     null,
@@ -622,7 +643,7 @@ function SavesPanel({ scope, ctx, gameTime }) {
         : [...saves].reverse().map((save) =>
             h(
               'section',
-              { key: save.id, className: `twp-card twp-save${save.restorable ? '' : ' legacy'}` },
+              { key: save.ref, className: `twp-card twp-save${save.restorable ? '' : ' legacy'}` },
               h(
                 'header',
                 { className: 'twp-card-h' },
@@ -632,7 +653,7 @@ function SavesPanel({ scope, ctx, gameTime }) {
               ),
               save.gameTime ? h('div', { className: 'twp-save-time' }, save.gameTime) : null,
               !save.restorable ? h('div', { className: 'twp-save-legacy-note' }, save.reasonIfNotRestorable ?? '当前版本不可直接恢复') : null,
-              confirmTarget?.id === save.id
+              confirmTarget?.ref === save.ref
                 ? h(
                     'div',
                     { className: 'twp-restore-confirm' },
@@ -643,20 +664,38 @@ function SavesPanel({ scope, ctx, gameTime }) {
                     ),
                     h(
                       'button',
-                      { className: 'twp-restore-do', onClick: () => restoreNow(save.id), disabled: busy },
+                      { className: 'twp-restore-do', onClick: () => restoreNow(save), disabled: busy },
                       busy ? '恢复中…' : '确认恢复'
                     ),
-                    h('button', { className: 'twp-restore-cancel', onClick: () => setConfirmId(null), disabled: busy }, '取消')
+                    h('button', { className: 'twp-restore-cancel', onClick: () => setConfirmRef(null), disabled: busy }, '取消')
                   )
                 : save.restorable
                   ? h(
                       'button',
-                      { className: 'twp-restore', onClick: () => setConfirmId(save.id), disabled: busy || running },
+                      { className: 'twp-restore', onClick: () => setConfirmRef(save.ref), disabled: busy || running },
                       '恢复到这里'
                     )
                   : null
             )
+          ),
+    // §7.1：恢复保护（系统）折叠区，默认收起，只读展示，不做成管理页
+    protections.length > 0
+      ? h(
+          'details',
+          { className: 'twp-protections' },
+          h('summary', null, `恢复保护（系统） ${protections.length}`),
+          h('div', { className: 'twp-protections-note' }, '恢复前自动建立的安全副本，仅用于回档异常时撤回。'),
+          protections.map((protection) =>
+            h(
+              'div',
+              { key: protection.name, className: 'twp-protection-row' },
+              h('span', { className: 'twp-protection-label' }, protection.label),
+              protection.gameTime ? h('span', { className: 'twp-protection-time' }, protection.gameTime) : null,
+              protection.restorable === false ? h('span', { className: 'twp-badge plain' }, '不完整') : null
+            )
           )
+        )
+      : null
   )
 }
 
@@ -973,7 +1012,16 @@ const CSS = `
   background: #fdf6ee; text-align: center; }
 .twp-restored-title { font-family: "STKaiti", "KaiTi", serif; font-size: 18px; font-weight: 700;
   color: #9e2b25; letter-spacing: 4px; margin-bottom: 8px; }
+.twp-restored-target { font-size: 13.5px; font-weight: 600; color: #2b2620; margin-bottom: 8px; }
 .twp-restored-warn { font-size: 13px; color: #9e2b25; font-weight: 600; line-height: 1.7; }
+.twp-protections { margin: 12px 4px 0; border: 1px solid #6b5a2a44; border-radius: 6px;
+  background: #f6f1e566; padding: 8px 12px; }
+.twp-protections > summary { cursor: pointer; font-size: 12.5px; color: #6b5a2a; font-weight: 600; }
+.twp-protections-note { font-size: 12px; color: #6b5a2a; margin: 6px 0 8px; line-height: 1.6; }
+.twp-protection-row { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px;
+  padding: 3px 0; border-top: 1px dashed #6b5a2a33; }
+.twp-protection-label { color: #2b2620; }
+.twp-protection-time { color: #6b5a2a; font-size: 12px; }
 `
 
 function injectCss() {

@@ -19,7 +19,7 @@ import path from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { resolveSessionPreset } from '@deepseek-ai/dsh-agent-presets'
 import { resolveGame, readBounded, readSavePolicy, describeSavePolicy } from '../../shared/游戏定位.js'
-import { createSnapshot, listSaves, resolveSaveDir, restoreSnapshot, withGameLock, readPolicyState } from '../../shared/存档.js'
+import { createSnapshot, listSaves, listProtections, resolveSaveRef, resolveSaveDirMatches, restoreSnapshot, withGameLock, readPolicyState } from '../../shared/存档.js'
 import { cutThreadBlock, appendToLedger, archiveEntry, LEDGER_SEED, THREAD_ID_PATTERN } from './线程归档.js'
 
 export const name = 'the-world-panel'
@@ -256,7 +256,11 @@ async function handleSave(ctx, game, sessionId, req, res) {
   }
 }
 
-/** POST /restore：真正 snapshot 回档（B10/B12/B13）。saveId 只接受服务端枚举值。 */
+/**
+ * POST /restore：真正 snapshot 回档（B10/B12/B13）。
+ * Restore Reliability v0.2：优先收 exact `saveRef`（服务端枚举的目录 basename）；
+ * 旧客户端的 `saveId` 只在编号唯一时兼容解析，duplicate 一律 fail closed（save-id-ambiguous）。
+ */
 async function handleRestore(ctx, game, sessionId, req, res) {
   if (req.method !== 'POST') {
     sendJson(res, 405, { ok: false, error: 'method-not-allowed' })
@@ -267,20 +271,57 @@ async function handleRestore(ctx, game, sessionId, req, res) {
     return
   }
   const body = await readBodyBounded(req)
-  let saveId = null
+  let payload = null
   try {
-    saveId = body ? JSON.parse(body)?.saveId : null
+    payload = body ? JSON.parse(body) : null
   } catch {
     // 非法 JSON 落入下面的 400
   }
-  const saveDir = typeof saveId === 'string' ? resolveSaveDir(game.dir, saveId) : null
-  if (!saveDir) {
-    sendJson(res, 400, { ok: false, error: 'invalid-save-id' })
+  const saveRef = typeof payload?.saveRef === 'string' ? payload.saveRef : null
+  const saveId = typeof payload?.saveId === 'string' ? payload.saveId : null
+
+  let saveDir = null
+  if (saveRef != null) {
+    if (!/^SAVE-\d+(?:_.+)?$/.test(saveRef) || saveRef.includes('/') || saveRef.includes('\\') || saveRef.includes('..')) {
+      sendJson(res, 400, { ok: false, error: 'invalid-save-ref' })
+      return
+    }
+    saveDir = resolveSaveRef(game.dir, saveRef)
+    if (!saveDir) {
+      sendJson(res, 404, { ok: false, error: 'save-ref-not-found' })
+      return
+    }
+  } else if (saveId != null) {
+    if (!/^SAVE-\d+$/.test(saveId)) {
+      sendJson(res, 400, { ok: false, error: 'invalid-save-id' })
+      return
+    }
+    const matches = resolveSaveDirMatches(game.dir, saveId)
+    if (matches.length > 1) {
+      sendJson(res, 409, { ok: false, error: 'save-id-ambiguous' })
+      return
+    }
+    if (matches.length === 0) {
+      sendJson(res, 400, { ok: false, error: 'invalid-save-id' })
+      return
+    }
+    saveDir = matches[0]
+  } else {
+    sendJson(res, 400, { ok: false, error: 'invalid-save-ref' })
     return
   }
+
   try {
     const save = withGameLock(game.dir, () => restoreSnapshot(game.dir, saveDir))
-    sendJson(res, 200, { ok: true, restored: save.id, requiresNewSession: true })
+    // 成功响应必须带 exact target 信息（§9）：客户端据此告诉玩家文件层恢复到了哪一份
+    sendJson(res, 200, {
+      ok: true,
+      restoredRef: save.ref,
+      restoredId: save.id,
+      restoredLabel: save.label,
+      restoredGameTime: save.gameTime,
+      requiresNewSession: true
+    })
   } catch (error) {
     const status = error.code === 'busy' || error.code === 'save-incompatible' ? 409 : error.code === 'save-not-found' ? 404 : 500
     sendJson(res, status, { ok: false, error: error.code ?? 'restore-failed', message: error.message })
@@ -380,9 +421,25 @@ export function apply(ctx, config) {
       if (url.pathname.endsWith('/saves')) {
         // GET：枚举存档元数据（不含真实路径 / source session 等内部字段）
         // Save Policy v0.2：附当前策略中文摘要与最近一次自动存档失败（若有），供存档页显形。
+        const allSaves = listSaves(game.dir)
         sendJson(res, 200, {
           game: { id: game.id },
-          saves: listSaves(game.dir),
+          // Restore Reliability v0.2：主列表不再平铺 pre-restore 保护档（§7.1）
+          saves: allSaves.filter((save) => save.kind !== 'pre-restore'),
+          // 保护档折叠区：旧时代 SAVE-NN_恢复前保护（兼容显示，不迁移不删除）
+          // + 新 saves/recovery/ 系统工件（listProtections）
+          protections: [
+            ...allSaves
+              .filter((save) => save.kind === 'pre-restore')
+              .map((save) => ({
+                name: save.ref,
+                label: save.label,
+                gameTime: save.gameTime,
+                createdAt: save.createdAt,
+                restorable: save.restorable
+              })),
+            ...listProtections(game.dir)
+          ],
           policy: describeSavePolicy(readSavePolicy(game.dir)),
           autoSaveError: readPolicyState(game.dir)?.lastAutoSaveError ?? null
         })
