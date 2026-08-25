@@ -1,11 +1,11 @@
 ---
 title: The World｜产品与实验总纲
 status: current-canonical-product-spec
-version: 0.6
-updated: 2026-08-24
-stage: Post-Gate-B / Player-facing Save & Restore
-previous_stage: Reality Gate B PASS
-next: Player-facing Save / Restore v0.1
+version: 0.7
+updated: 2026-08-25
+stage: Post-Save-Restore / Authored Map v0.1
+previous_stage: Reality Gate B PASS + Player-facing Save / Restore
+next: The World Map v0.1 — Authored World Map Projection
 reference_host: DeepSeek Harness
 ---
 
@@ -99,6 +99,7 @@ The World 必须证明自己提供的是 **DSH 之外的长期 RPG 产品价值*
 - 世界不会因为玩家存在就放弃因果与合理性；
 - 玩家可以自然语言尝试任何行动；
 - NPC / 势力 / 地点 / 冲突拥有持续身份；
+- **重要 NPC 拥有自己的目标、义务、底线与离屏行动，不只是等待玩家交互的回应面；**
 - 玩家行为产生可信、可延迟、可累积的后果；
 - GM 主动把有意义的舞台组织到玩家身边；
 - 但玩家不永远处于“被事件推着走”的状态；
@@ -237,6 +238,38 @@ Life Loop
 
 不使用机械“每 N 个事件休息一次”的节奏状态机。
 
+### 4.6 NPC Agency｜NPC 是行动者，不是回应面
+
+2026-08-25《乱世三国2》真实试玩确认：人物卡的纸面人格差异已经存在，但实际 GM 容易把重要 NPC 演成“不同口吻的高级 Buff”——玩家提出方案，NPC 分析风险后大体同意并帮助执行。
+
+正式原则：
+
+> **An NPC is not a response surface. An NPC is an actor with a life that continues without the player.**
+>
+> **NPC 不是等待玩家交互的回应面，而是即使玩家不理他也会继续行动的人。**
+
+重要 NPC 应按需维持以下自然语言锚点，而不是统一机器 Schema：
+
+```text
+Current Agenda       他现在真正想推动什么？
+Fear / Cost          他最怕失去什么？
+Red Line             什么事情他现在绝不会接受？
+Obligation           他对谁、对什么负有责任？
+Independent Next Move 玩家暂时不管他，他下一步自己会做什么？
+```
+
+NPC 可以主动：调查、写信、交易、反对、帮助、拖延、行动、处理自己的危机、与第三方建立关系。
+
+好关系不等于永远同意。玩家势力越成功，人物之间不同的利益、义务与政治立场越可以成为新的中盘玩法，而不是通过人工提高敌人数值来“平衡成功”。
+
+人物自主性仍严格遵守知识边界，并继续遵循：
+
+> **重要性决定注意力与模拟资源。**
+
+不建设全世界逐回合 NPC 模拟器。
+
+通用指南：`library/characters/NPC自主性与交互_GM指南_v0.1.md`。
+
 ---
 
 ## 5. Player Agency & Control
@@ -260,6 +293,39 @@ Player Agency 不等于每个动作都必须由玩家手操。
 > **Compress dead time; stop at meaningful choice.**
 
 玩家自然语言可以临时扩大 / 缩小授权，并可随时接管。
+
+### 5.3 Meaningful Choice = Different Risk Structure
+
+真实试玩确认：只让选项拥有不同叙事方向，而最后都落成相似的 `d20 + 修正 vs DC12/15`，会削弱玩家对“选择方法”的感受。
+
+正式原则：
+
+> **A meaningful choice should differ in risk structure, not only narrative direction.**
+>
+> **有意义的选择不仅结果方向不同，风险结构也应不同。**
+
+行动路线的风险可以同时来自：
+
+```text
+可行性：直接成立 / 需要检定 / 当前不成立
+固有难度：DC
+情境态势：优势 / 普通 / 劣势
+失败代价：时间 / 资源 / 暴露 / 关系 / 身份 / 伤害 / 局势升级
+```
+
+“失败改变局面，而不是关闭游戏”继续成立，但不同做法应让失败把局面推向不同方向。
+
+优势 / 劣势不是装饰机制。人物人格、关系历史、准备、情报与沟通方式都可以真实改变一次行动的风险。
+
+同时：
+
+> **Dice decides uncertainty. Dice does not erase character.**
+>
+> **骰子裁定不确定性，不抹除人物。**
+
+已稳定成立的人物底线不能因为一次天然 20 被随意击穿。
+
+裁定细则见：`library/mechanics/判定与检定_Expansion_Pack_v0.1.md`。
 
 ---
 
@@ -285,6 +351,27 @@ Player Agency 不等于每个动作都必须由玩家手操。
 2. **Preventive infrastructure**：validator、typed mutation、事务层等，必须由真实重复失败推动。
 
 禁止因为理论风险重建第二版式重型 Runtime / Guardrail。
+
+### 6.1 DSH Host Debt｜输出质量优先于宿主完美度
+
+长期试玩确认当前两层维护天然存在 eventual consistency：DELTAS / CURRENT 可以比 characters / mechanics / THREADS / RECENT 更早反映最新世界事实，后者在 checkpoint consolidation 时集中收敛。
+
+只要：
+
+- durable facts 没有丢；
+- DELTAS 继续是写入即生效的 authoritative facts；
+- CURRENT 足够支撑当前场景；
+- 新 Session 恢复没有明显错误；
+
+当前 DSH 版允许部分 Owner 阶段性滞后。
+
+不为此立即建设 typed mutation、通用状态数据库或高频 consolidation。
+
+当前优先级：
+
+> **GM 输出质量 / 角色表现 / 沉浸 / 玩家体验 > 为 DSH 消除所有内部状态滞后。**
+
+这类问题记录到 `docs/FUTURE_STANDALONE_BACKLOG.md`，作为未来独立游戏 Host 的需求证据。
 
 ---
 
@@ -459,18 +546,27 @@ Gate B 问：
 - 玩家可以改变历史；
 - 已发生分叉不得为了贴回 Source 被静默修正。
 
-当前 `games/luan-shi-sanguo/` 已完成 Gate A 长局验证与 Gate B UI vertical 的真实验证，并继续作为后续 Save / Restore 的首个真实数据源。
+`games/luan-shi-sanguo/` 已完成 Gate A 长局验证与 Gate B UI vertical 验证。  
+`games/luan-shi-sanguo-2/` 继续承担 Post-Gate-B 长期真实试玩，已经验证：跨年时间压缩、自立路线、战争/治理/人物班底联动、Save/Restore 实用性，并暴露风险结构、NPC 自主性和 DSH consolidation eventual consistency 等新的产品证据。
 
 ---
 
 ## 13. Open Questions / Non-blocking
 
-- Player-facing Save / Restore 完整闭环；
-- Restore 后如何用当前 DSH 公共 client / host seam 显式创建并切换到恢复完成后出生的全新 Session；
+- **The World Map v0.1**：authored world map + current-location projection 是否 materially improve 长局空间认知；
+- NPC Agency 指南能否让重要人物从“不同口吻的 Buff”变成真正需要区别相处的行动者；
+- 现有优势/劣势与 risk-structure 纪律能否让不同方案产生明显不同的风险体验；
 - protagonist control mode 最终 UI binding；
-- Map / Relationship / Faction 等下一批 RPG plugin 的真实优先级；
+- Relationship / Faction 等后续 RPG plugin 的真实优先级；
 - 当前过渡判定层是否最终演化为正式判定机制插件；
-- DSH Developer Preview breaking-change 适配成本。
+- DSH Developer Preview breaking-change 适配成本；
+- consolidation eventual consistency、Restore latency 等宿主债务何时只记录而不再继续优化。
+
+已不再作为当前阻塞项：
+
+- player-facing Save / Restore 基础闭环；
+- Restore fresh-session correctness；
+- 为 DSH 消除所有 Owner 文件更新滞后。
 
 ---
 
@@ -499,15 +595,42 @@ Gate B 问：
 - **DEC-P21** Gate B = Material RPG Value Gate：插件必须真实改善玩家体验，不以功能数量或技术可行为 PASS 标准。
 - **DEC-P22** Reality Gate B = PASS（2026-08-24，`the-world-panel` Player Experience Redesign 后人工裁定）。
 - **DEC-P23** Restore Requires Fresh Session：恢复 workspace 后，不能继续使用包含未来历史的旧 DSH Session；必须进入恢复完成后新创建的 Session，或明确要求玩家新建 Session。
+- **DEC-P24** Meaningful Choice Risk Structure：有意义的选择不仅叙事方向不同，还应在可行性、DC、优势/劣势或失败 stakes 上形成真实差异。
+- **DEC-P25** Dice Does Not Erase Character：骰子裁定真实不确定性，不击穿已经成立的人物人格与底线。
+- **DEC-P26** NPC as Actor：重要 NPC 是有独立目标、义务、底线和离屏下一步的行动者，不是等待玩家交互的回应面。
+- **DEC-P27** DSH Eventual Consistency Accepted：只要 durable facts 不丢，Owner 文档阶段性滞后在当前 DSH 版可接受；GM 输出质量与玩家体验优先，宿主债务进入 Future Standalone Backlog。
+- **DEC-P28** Authored Map First：地图初版由世界包作者定制，插件只负责展示与 canonical current-location projection；自动地图生成不是当前任务。
 
 ---
 
 ## 15. Current Decision
 
-**Product Definition Gate：PASS。TW-00.5：COMPLETE。TW-01 / Reality Gate A：PASS。Reality Gate B：PASS。**
+**Product Definition Gate：PASS。TW-00.5：COMPLETE。TW-01 / Reality Gate A：PASS。Reality Gate B：PASS。Player-facing Save / Restore：可用并进入维护期。**
 
-已完成（2026-08-24，`the-world-panel` 0.3.0）：
+Save / Restore 当前已验证：
 
-> **Player-facing presentation cleanup（char-\* 显示名映射 / 文件引用剥离 / Hero 压缩 / 装备去重 / 状态本地化）+ Player-facing Save / Restore v0.1：确定性浏览 / 创建 / 恢复 Save Point，恢复前自动建立保护存档，恢复完成后自动切换到恢复后新出生的 DSH Session（seam 缺失时显眼降级为人工新建提示），避免旧对话历史污染回档世界。**
+- manual save；
+- interval / milestone save policy；
+- exact-target Restore；
+- pre-restore recovery namespace；
+- fresh-session boundary；
+- Windows `fs.watch` / rename 冲突修复；
+- 玩家真实恢复可用。
 
-执行任务：`docs/experiments/POST_GATE_B_PANEL_CLEANUP_SAVE_RESTORE_KIMICODE_TASK_2026-08-24.md`。
+已知但接受：Restore 读取/切换较慢，记录为 DSH host debt，不继续作为当前产品主线。
+
+2026-08-25 长局试玩新增产品结论：
+
+- 强化 meaningful choice 的风险结构差异；
+- 使用现有 advantage / disadvantage 表现方法与人物差异；
+- 强化重要 NPC 自主性与独立行动；
+- 接受 DSH consolidation 带来的 Owner eventual consistency；
+- 当前优先 GM 输出质量、沉浸和真实玩家价值。
+
+正式记录：`docs/experiments/PLAYTEST_FINDINGS_2026-08-25_RISK_NPC_AGENCY_DSH_DEBT.md`。
+
+**下一项正式插件任务：**
+
+> **The World Map v0.1 — Authored World Map Projection**
+
+目标：世界包提供人工定制地图，地图插件负责展示、缩放/拖动，并根据 canonical 当前地点标注玩家位置。初版不做自动地图生成、GIS、路径规划、点击移动、动态 NPC / 势力态势。
