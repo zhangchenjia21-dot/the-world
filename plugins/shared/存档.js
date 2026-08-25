@@ -31,6 +31,11 @@ const SAVE_DIR_PATTERN = /^(SAVE-\d+)(?:_(.+))?$/
 const META_FILE = 'META.md'
 const MAX_AUTO_SAVES = 5
 
+/** Restore Reliability v0.2：pre-restore 保护档的系统 namespace，不占玩家 SAVE 编号。 */
+export const RECOVERY_DIR = 'recovery'
+const PROTECTION_PREFIX = 'PRE-RESTORE-'
+const MAX_PROTECTIONS = 3
+
 /** 存档类型 → 玩家可见中文标签。 */
 const KIND_LABELS = {
   manual: '手动',
@@ -105,8 +110,8 @@ function readMeta(saveDir) {
 
 /** 检查单个存档目录；不存在或不可读返回 null。 */
 export function inspectSave(saveDir) {
-  const id = path.basename(saveDir)
-  const idMatch = SAVE_DIR_PATTERN.exec(id)
+  const dirName = path.basename(saveDir)
+  const idMatch = SAVE_DIR_PATTERN.exec(dirName)
   if (!idMatch) return null
 
   let stat
@@ -130,6 +135,8 @@ export function inspectSave(saveDir) {
 
   return {
     id: idMatch[1],
+    /** 存储层精确引用：目录 basename。玩家显示编号可能重复（历史脏数据），ref 不会。 */
+    ref: dirName,
     label: meta.label || (idMatch[2] ? idMatch[2].replace(/_/g, ' ') : idMatch[1]),
     kind,
     kindLabel: KIND_LABELS[kind] ?? KIND_LABELS.legacy,
@@ -157,8 +164,21 @@ export function listSaves(gameDir) {
 }
 
 function nextSaveId(gameDir) {
-  const max = listSaves(gameDir).reduce((acc, save) => {
-    const n = Number.parseInt(save.id.slice(5), 10)
+  // Restore Reliability v0.2：扫描 saves/ 顶层所有目录名的 SAVE-(\d+) 前缀取最大值 + 1，
+  // 不再只数「能被当前 parser 识别」的快照——损坏 / legacy / duplicate / 旧模型直写
+  // 目录占用了编号就不能再发，避免继续制造 duplicate SAVE-NN。不自动重命名既有目录。
+  const savesDir = path.join(gameDir, 'saves')
+  let entries
+  try {
+    entries = fs.readdirSync(savesDir, { withFileTypes: true })
+  } catch {
+    entries = []
+  }
+  const max = entries.reduce((acc, entry) => {
+    if (!entry.isDirectory()) return acc
+    const match = /^SAVE-(\d+)/.exec(entry.name)
+    if (!match) return acc
+    const n = Number.parseInt(match[1], 10)
     return Number.isFinite(n) && n > acc ? n : acc
   }, 0)
   return `SAVE-${String(max + 1).padStart(2, '0')}`
@@ -247,7 +267,8 @@ function rotateAutoSnapshots(gameDir) {
   const autos = listSaves(gameDir).filter((save) => save.kind === 'auto-checkpoint')
   const excess = autos.slice(0, Math.max(0, autos.length - MAX_AUTO_SAVES))
   for (const save of excess) {
-    const saveDir = resolveSaveDir(gameDir, save.id)
+    // 用枚举时拿到的精确 ref 删除：duplicate SAVE-NN 下按 id 解析会误删别的目录
+    const saveDir = resolveSaveRef(gameDir, save.ref)
     if (saveDir) removeDirRecursive(saveDir)
   }
 }
@@ -311,20 +332,108 @@ function assertRestorable(saveDir) {
   return info
 }
 
+/** 恢复前保护档目录名：PRE-RESTORE-<UTC 时间戳>-<同秒序号>，字典序即时间序。 */
+function nextProtectionName(recoveryDir) {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '')
+  let maxSeq = 0
+  try {
+    for (const entry of fs.readdirSync(recoveryDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const match = new RegExp(`^${PROTECTION_PREFIX}${stamp}-(\\d+)$`).exec(entry.name)
+      if (match) maxSeq = Math.max(maxSeq, Number.parseInt(match[1], 10))
+    }
+  } catch { /* recovery/ 还不存在 */ }
+  return `${PROTECTION_PREFIX}${stamp}-${String(maxSeq + 1).padStart(3, '0')}`
+}
+
+/**
+ * 建立恢复前保护档：放进 saves/recovery/ 系统 namespace（Restore Reliability v0.2），
+ * 不占玩家 SAVE 编号、不进玩家主列表；快照内容与 createSnapshot 语义一致。
+ */
+function createProtectionSnapshot(gameDir, gameTime) {
+  assertWorkspaceComplete(gameDir)
+  const savesDir = path.join(gameDir, 'saves')
+  const recoveryDir = path.join(savesDir, RECOVERY_DIR)
+  const name = nextProtectionName(recoveryDir)
+  const targetDir = path.join(recoveryDir, name)
+  const label = `恢复前保护 · ${gameTime}`
+  fs.mkdirSync(recoveryDir, { recursive: true })
+  try {
+    copySnapshotContents(gameDir, targetDir)
+    fs.writeFileSync(
+      path.join(targetDir, META_FILE),
+      buildMeta({ saveId: name, kind: 'pre-restore', gameTime, label }),
+      'utf8'
+    )
+  } catch (error) {
+    // 半成品保护档不能留下
+    removeDirRecursive(targetDir, { force: true })
+    throw error
+  }
+  return { name, dir: targetDir, label, gameTime }
+}
+
+/**
+ * 枚举 saves/recovery/ 下的恢复前保护档（系统 namespace，按名称升序 = 时间升序）。
+ * 这些目录不是 SAVE-NN，inspectSave 不适用；这里单独解析 META + 结构完整性，
+ * 供 Panel 折叠区展示与异常时人工恢复参考。
+ */
+export function listProtections(gameDir) {
+  const recoveryDir = path.join(gameDir, 'saves', RECOVERY_DIR)
+  let entries
+  try {
+    entries = fs.readdirSync(recoveryDir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  return entries
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith(PROTECTION_PREFIX))
+    .map((entry) => {
+      const dir = path.join(recoveryDir, entry.name)
+      const meta = parseMeta(readMeta(dir))
+      const restorable = REQUIRED_STRUCTURE.every((relative) => {
+        try {
+          return fs.statSync(path.join(dir, relative)).isFile()
+        } catch {
+          return false
+        }
+      })
+      return {
+        name: entry.name,
+        label: meta.label || '恢复前保护',
+        gameTime: meta.gameTime ?? null,
+        createdAt: meta.createdAt ?? null,
+        restorable
+      }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** 系统保护档只保留最近 3 份（名称字典序即时间序）。 */
+function rotateProtections(gameDir) {
+  const protections = listProtections(gameDir)
+  const excess = protections.slice(0, Math.max(0, protections.length - MAX_PROTECTIONS))
+  for (const protection of excess) {
+    removeDirRecursive(path.join(gameDir, 'saves', RECOVERY_DIR, protection.name), { force: true })
+  }
+}
+
 /**
  * 恢复快照（真正 snapshot 语义，B12）：
  * 1. 完整验证源；
- * 2. 先建 pre-restore 保护档，失败则整体失败、不动 live（B10）；
+ * 2. 先建 pre-restore 保护档（saves/recovery/ 系统 namespace），失败则整体失败、不动 live（B10）；
  * 3. staging 目录组装快照内容；
  * 4. live 各条目 rename 到 backup → staging 条目 rename 就位；
  * 5. 任何异常从 backup 回滚并 fail loud；成功后删除 backup。
  * 结果：live 中存档里没有的文件（如 T5 新增）必须消失。
+ * 保护档生命周期（§7.3）：rollback 确认完整 → 删除本次保护档（失败重试不堆积）；
+ * rollback 不完整 → 保留本次保护档与 staging/backup 供人工恢复。成功后滚动只留最近 3 份。
  */
 export function restoreSnapshot(gameDir, saveDir) {
   const info = assertRestorable(saveDir)
 
   const gameTime = readGameDynamics(gameDir).time ?? '未知时点'
-  createSnapshot(gameDir, { kind: 'pre-restore', label: `恢复前保护 · ${gameTime}` })
+  const protection = createProtectionSnapshot(gameDir, gameTime)
 
   const stagingDir = path.join(gameDir, `.restore-staging-${Date.now()}`)
   const backupDir = path.join(gameDir, `.restore-backup-${Date.now()}`)
@@ -373,8 +482,12 @@ export function restoreSnapshot(gameDir, saveDir) {
       }
     }
     preserveRecoveryDirs = rollbackErrors.length > 0
+    if (!preserveRecoveryDirs) {
+      // rollback 确认完整：live 已回到恢复前，本次 protection 是多余材料，删除避免失败重试堆积
+      removeDirRecursive(protection.dir, { force: true })
+    }
     const rollbackState = preserveRecoveryDirs
-      ? '自动回滚未完整完成，已保留 staging/backup 供人工恢复'
+      ? '自动回滚未完整完成，已保留 staging/backup 与恢复前保护档供人工恢复'
       : '已回滚到恢复前状态'
     const loud = new Error(`恢复失败，${rollbackState}：${error.message}`)
     loud.code = 'restore-failed'
@@ -386,24 +499,49 @@ export function restoreSnapshot(gameDir, saveDir) {
       removeDirRecursive(backupDir, { force: true })
     }
   }
+  rotateProtections(gameDir)
   return info
 }
 
 /**
- * 按服务端枚举出的 save id（SAVE-NN）定位目录。
- * 只接受编号形式，客户端永远不给任意路径（B6）；找不到返回 null。
+ * 按玩家显示编号枚举 saves/ 顶层所有匹配目录（exact name 或 `SAVE-NN_后缀`）。
+ * 历史脏数据可能制造 duplicate SAVE-NN，这里如实返回全部匹配；
+ * 玩家可恢复目标的定位绝不能「取第一个」（Restore Reliability v0.2）。
  */
-export function resolveSaveDir(gameDir, saveId) {
-  if (typeof saveId !== 'string' || !/^SAVE-\d+$/.test(saveId)) return null
+export function resolveSaveDirMatches(gameDir, saveId) {
+  if (typeof saveId !== 'string' || !/^SAVE-\d+$/.test(saveId)) return []
   const savesDir = path.join(gameDir, 'saves')
   let entries
   try {
     entries = fs.readdirSync(savesDir, { withFileTypes: true })
   } catch {
-    return null
+    return []
   }
-  const hit = entries.find((entry) => entry.isDirectory() && (entry.name === saveId || entry.name.startsWith(`${saveId}_`)))
-  return hit ? path.join(savesDir, hit.name) : null
+  return entries
+    .filter((entry) => entry.isDirectory() && (entry.name === saveId || entry.name.startsWith(`${saveId}_`)))
+    .map((entry) => path.join(savesDir, entry.name))
+}
+
+/**
+ * 兼容旧调用：按编号取第一个匹配目录（保留旧行为给内部非玩家目标场景）。
+ * 新代码定位玩家可恢复目标时必须用 resolveSaveRef / resolveSaveDirMatches。
+ */
+export function resolveSaveDir(gameDir, saveId) {
+  return resolveSaveDirMatches(gameDir, saveId)[0] ?? null
+}
+
+/**
+ * Restore Reliability v0.2：存储层精确引用（exact ref）解析。
+ * ref 只能是服务端枚举出的 saves/ 顶层目录 basename（SAVE_DIR_PATTERN）：
+ * 拒绝分隔符逃逸、`..`、绝对路径；最终还必须通过 inspectSave 存在于枚举国里。
+ */
+export function resolveSaveRef(gameDir, ref) {
+  if (typeof ref !== 'string' || !SAVE_DIR_PATTERN.test(ref)) return null
+  if (ref.includes('/') || ref.includes('\\') || ref.includes('..') || path.isAbsolute(ref)) return null
+  const savesDir = path.join(gameDir, 'saves')
+  const candidate = path.join(savesDir, ref)
+  if (path.dirname(candidate) !== savesDir) return null
+  return inspectSave(candidate) ? candidate : null
 }
 
 /** B14：同一 game 的写操作串行。进程内互斥；占用时抛 busy，让调用方返回显式错误。 */
