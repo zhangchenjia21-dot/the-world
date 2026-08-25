@@ -9,12 +9,16 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   REQUIRED_STRUCTURE,
+  RECOVERY_DIR,
   POLICY_STATE_FILE,
   createSnapshot,
   inspectSave,
   listSaves,
+  listProtections,
   parseMeta,
   resolveSaveDir,
+  resolveSaveRef,
+  resolveSaveDirMatches,
   restoreSnapshot,
   sanitizeLabel,
   sanitizeMilestoneLabel,
@@ -189,10 +193,13 @@ test('restore 前生成 pre-restore protection save（§12.2-6）', () => {
   const targetDir = path.join(gameDir, 'saves', `${target.id}_目标档`)
   restoreSnapshot(gameDir, targetDir)
 
-  const saves = listSaves(gameDir)
-  const protection = saves.find((s) => s.kind === 'pre-restore')
-  assert.ok(protection, '必须有保护档')
-  assert.match(protection.label, /恢复前保护/)
+  // Restore Reliability v0.2：保护档进 saves/recovery/ 系统 namespace，不进玩家主列表
+  assert.equal(listSaves(gameDir).some((s) => s.kind === 'pre-restore'), false, '主列表不得平铺保护档')
+  const protections = listProtections(gameDir)
+  assert.equal(protections.length, 1, '必须有一份保护档')
+  assert.match(protections[0].label, /恢复前保护/)
+  assert.equal(protections[0].restorable, true)
+  assert.ok(fs.existsSync(path.join(gameDir, 'saves', RECOVERY_DIR, protections[0].name)))
 })
 
 test('pre-restore protection 创建失败时 live workspace 零 mutation', () => {
@@ -295,9 +302,8 @@ test('saves/ 本身在 restore 后原样保留（§12.2-8）', () => {
   restoreSnapshot(gameDir, path.join(gameDir, 'saves', `${first.id}_甲`))
 
   const ids = listSaves(gameDir).map((s) => s.id)
-  assert.ok(ids.includes(first.id))
-  assert.ok(ids.includes(second.id))
-  assert.ok(ids.length === 3, '目标档 + 另一份 + pre-restore 保护档都应在')
+  assert.deepEqual(ids.sort(), [first.id, second.id].sort(), '主列表只剩目标档 + 另一份 manual 存档')
+  assert.equal(listProtections(gameDir).length, 1, '保护档在 saves/recovery/，不占玩家存档编号')
 })
 
 test('并发第二个 save/restore 被 busy 拒绝（§12.2-9）', () => {
@@ -471,4 +477,192 @@ test('POLICY_STATE.json 不进入 snapshot（§4：执行簿记不是世界真�
   const saveDir = resolveSaveDir(gameDir, save.id)
   assert.equal(fs.existsSync(path.join(saveDir, 'saves')), false)
   assert.equal(fs.existsSync(path.join(saveDir, POLICY_STATE_FILE)), false)
+})
+
+/** ── Restore Reliability v0.2（任务 §13）：exact ref / recovery namespace ───── */
+
+/** 测试内递归复制（禁用 fs.cpSync：Node v24 Windows 中文路径静默复制空目录）。 */
+function copyDirRecursiveForTest(from, to) {
+  fs.mkdirSync(to, { recursive: true })
+  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    const sourcePath = path.join(from, entry.name)
+    const targetPath = path.join(to, entry.name)
+    if (entry.isDirectory()) copyDirRecursiveForTest(sourcePath, targetPath)
+    else if (entry.isFile()) fs.copyFileSync(sourcePath, targetPath)
+  }
+}
+
+/** 真实试玩档的 duplicate SAVE-04（只读复制进临时 fixture，绝不修改原档）。 */
+const REAL_SAVES_DIR = path.resolve(import.meta.dirname, '..', '..', 'games', 'luan-shi-sanguo-2', 'saves')
+const REAL_PROTECTION_NAME = 'SAVE-04_恢复前保护 · 东汉 · 中平元年（184 年）'
+const REAL_MILESTONE_NAME = 'SAVE-04_隶义兵籍入张庄共谋'
+
+test('真实 duplicate SAVE-04：exact ref 区分并精确恢复里程碑档（§12/§13-1/3/11）', (t) => {
+  if (
+    !fs.existsSync(path.join(REAL_SAVES_DIR, REAL_PROTECTION_NAME)) ||
+    !fs.existsSync(path.join(REAL_SAVES_DIR, REAL_MILESTONE_NAME))
+  ) {
+    t.skip('真实 duplicate SAVE-04 fixture 不在本机')
+    return
+  }
+  const gameDir = makeGameDir()
+  const savesDir = path.join(gameDir, 'saves')
+  copyDirRecursiveForTest(path.join(REAL_SAVES_DIR, REAL_PROTECTION_NAME), path.join(savesDir, REAL_PROTECTION_NAME))
+  copyDirRecursiveForTest(path.join(REAL_SAVES_DIR, REAL_MILESTONE_NAME), path.join(savesDir, REAL_MILESTONE_NAME))
+  // 临时副本补齐 v0.2 结构：真实里程碑档是旧时代模型直写，缺 state/characters/INDEX.md
+  const milestoneIndex = path.join(savesDir, REAL_MILESTONE_NAME, 'state', 'characters', 'INDEX.md')
+  fs.mkdirSync(path.dirname(milestoneIndex), { recursive: true })
+  fs.writeFileSync(milestoneIndex, '# INDEX\n', 'utf8')
+
+  // §12-1：同编号两者同时枚举且 ref 不同
+  const dup = listSaves(gameDir).filter((save) => save.id === 'SAVE-04')
+  assert.equal(dup.length, 2)
+  assert.deepEqual(new Set(dup.map((save) => save.ref)), new Set([REAL_PROTECTION_NAME, REAL_MILESTONE_NAME]))
+
+  // exact ref 各自精确命中
+  assert.equal(resolveSaveRef(gameDir, REAL_MILESTONE_NAME), path.join(savesDir, REAL_MILESTONE_NAME))
+  assert.equal(resolveSaveRef(gameDir, REAL_PROTECTION_NAME), path.join(savesDir, REAL_PROTECTION_NAME))
+
+  // §12-3 / §13-11：选择里程碑档时精确恢复里程碑档，不能误命中同 id 的保护档
+  const milestoneMarker = read(path.join(savesDir, REAL_MILESTONE_NAME, 'state', 'CURRENT.md'))
+  const protectionMarker = read(path.join(savesDir, REAL_PROTECTION_NAME, 'state', 'CURRENT.md'))
+  assert.notEqual(milestoneMarker, protectionMarker, 'fixture 两个目录内容必须可区分')
+  restoreSnapshot(gameDir, resolveSaveRef(gameDir, REAL_MILESTONE_NAME))
+  assert.equal(read(path.join(gameDir, 'state', 'CURRENT.md')), milestoneMarker, '必须恢复里程碑档而非同 id 保护档')
+
+  // §12-4：旧 saveId 语义下多匹配（Panel 据此返回 save-id-ambiguous，绝不「取第一个」）
+  assert.equal(resolveSaveDirMatches(gameDir, 'SAVE-04').length, 2)
+})
+
+test('resolveSaveRef：非法 ref / 路径穿越一律拒绝（§13-3）', () => {
+  const gameDir = makeGameDir()
+  const save = createSnapshot(gameDir, { kind: 'manual', label: '目标' })
+  const savesDir = path.join(gameDir, 'saves')
+  assert.equal(resolveSaveRef(gameDir, save.ref), path.join(savesDir, save.ref))
+  const rejected = [
+    'SAVE-01/../../games',
+    '../..',
+    'SAVE-01/x',
+    'SAVE-01\\x',
+    'SAVE-01_..',
+    'PRE-RESTORE-20260825T000000-001',
+    'SAVE-aa',
+    'SAVE-99_不存在',
+    ''
+  ]
+  for (const bad of rejected) {
+    assert.equal(resolveSaveRef(gameDir, bad), null, bad)
+  }
+  // 绝对路径形式
+  assert.equal(resolveSaveRef(gameDir, path.join(savesDir, save.ref)), null, '绝对路径必须拒绝')
+})
+
+test('nextSaveId：所有 SAVE 前缀目录都占编号（§5/§13-4）', () => {
+  const gameDir = makeGameDir()
+  const savesDir = path.join(gameDir, 'saves')
+  // duplicate / legacy / 损坏（空目录）都占用编号
+  for (const name of ['SAVE-04_A', 'SAVE-04_B', 'SAVE-09_legacy']) {
+    fs.mkdirSync(path.join(savesDir, name), { recursive: true })
+  }
+  const save = createSnapshot(gameDir, { kind: 'manual', label: '新档' })
+  assert.equal(save.id, 'SAVE-10')
+})
+
+test('protection 不消耗 SAVE 编号且不进 snapshot（§13-6/20）', () => {
+  const gameDir = makeGameDir()
+  const first = createSnapshot(gameDir, { kind: 'manual', label: '一' })
+  const second = createSnapshot(gameDir, { kind: 'manual', label: '二' })
+  assert.equal(first.id, 'SAVE-01')
+  assert.equal(second.id, 'SAVE-02')
+
+  restoreSnapshot(gameDir, resolveSaveRef(gameDir, first.ref))
+  assert.equal(listProtections(gameDir).length, 1)
+
+  // 保护档不占玩家编号：下一份 manual 仍是 SAVE-03
+  const third = createSnapshot(gameDir, { kind: 'manual', label: '三' })
+  assert.equal(third.id, 'SAVE-03')
+
+  // saves/（含 recovery/）不进入任何快照
+  const thirdDir = path.join(gameDir, 'saves', third.ref)
+  assert.equal(fs.existsSync(path.join(thirdDir, 'saves')), false)
+})
+
+test('protection rotation：只保留最近 3 份（§7.2/§13-8）', () => {
+  const gameDir = makeGameDir()
+  const target = createSnapshot(gameDir, { kind: 'manual', label: '基准' })
+  const targetDir = resolveSaveRef(gameDir, target.ref)
+  for (let round = 0; round < 4; round += 1) {
+    fs.writeFileSync(path.join(gameDir, 'state', 'CURRENT.md'), `# CURRENT\n\n- 时间: 第${round}轮\n`, 'utf8')
+    restoreSnapshot(gameDir, targetDir)
+  }
+  const protections = listProtections(gameDir)
+  assert.equal(protections.length, 3, '4 次成功 restore 后只留最近 3 份保护档')
+  const recoveryEntries = fs
+    .readdirSync(path.join(gameDir, 'saves', RECOVERY_DIR))
+    .filter((name) => name.startsWith('PRE-RESTORE-'))
+  assert.equal(recoveryEntries.length, 3)
+})
+
+test('restore 失败且 rollback 完整时删除本次 protection（§7.3/§13-9）', () => {
+  const gameDir = makeGameDir()
+  const target = createSnapshot(gameDir, { kind: 'manual', label: '目标档' })
+  const originalRename = fs.renameSync
+  let injected = false
+  fs.renameSync = (from, to) => {
+    if (!injected && path.basename(from) === 'state' && String(from).includes('.restore-staging-')) {
+      injected = true
+      const error = new Error('注入 staging rename 失败')
+      error.code = 'EACCES'
+      throw error
+    }
+    return originalRename(from, to)
+  }
+  try {
+    assert.throws(
+      () => restoreSnapshot(gameDir, resolveSaveRef(gameDir, target.ref)),
+      (error) => error?.code === 'restore-failed'
+    )
+  } finally {
+    fs.renameSync = originalRename
+  }
+  assert.equal(injected, true)
+  assert.equal(listProtections(gameDir).length, 0, 'rollback 完整时本次 protection 必须删除')
+  // live 完整回滚
+  assert.equal(read(path.join(gameDir, 'state', 'CURRENT.md')), '# CURRENT\n\n- 时间: 中平元年三月初十夜\n- 当前位置: 巨鹿城内\n')
+})
+
+test('rollback 不完整时保留 protection 与恢复材料（§7.3/§13-10）', () => {
+  const gameDir = makeGameDir()
+  const target = createSnapshot(gameDir, { kind: 'manual', label: '目标档' })
+  const originalRename = fs.renameSync
+  let phase = 0
+  fs.renameSync = (from, to) => {
+    // 第一次 staging 安装失败
+    if (phase === 0 && path.basename(from) === 'state' && String(from).includes('.restore-staging-')) {
+      phase = 1
+      const error = new Error('注入 staging rename 失败')
+      error.code = 'EACCES'
+      throw error
+    }
+    // rollback 把 backup 的 state 移回 live 时也失败 → 不完整
+    if (phase === 1 && path.basename(from) === 'state' && String(from).includes('.restore-backup-')) {
+      phase = 2
+      const error = new Error('注入 rollback rename 失败')
+      error.code = 'EACCES'
+      throw error
+    }
+    return originalRename(from, to)
+  }
+  try {
+    assert.throws(
+      () => restoreSnapshot(gameDir, resolveSaveRef(gameDir, target.ref)),
+      (error) => error?.code === 'restore-failed' && /未完整完成/.test(error.message)
+    )
+  } finally {
+    fs.renameSync = originalRename
+  }
+  assert.equal(phase, 2)
+  assert.equal(listProtections(gameDir).length, 1, 'rollback 不完整时 protection 必须保留')
+  const leftovers = fs.readdirSync(gameDir).filter((name) => name.startsWith('.restore-'))
+  assert.ok(leftovers.length > 0, 'staging/backup 恢复材料必须保留供人工恢复')
 })

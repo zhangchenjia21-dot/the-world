@@ -20,7 +20,8 @@ const reactStub = {
   useState: (init) => {
     const i = hookIdx++
     if (!(i in hooks)) hooks[i] = { v: typeof init === 'function' ? init() : init }
-    return [hooks[i].v, (nv) => { hooks[i].v = nv; rerender() }]
+    // 与 React 一致：setter 支持函数式更新（收到函数时以当前值求值）
+    return [hooks[i].v, (nv) => { hooks[i].v = typeof nv === 'function' ? nv(hooks[i].v) : nv; rerender() }]
   },
   useEffect: (fn, deps) => {
     const i = hookIdx++
@@ -383,6 +384,103 @@ sessions.open = async (id) => { order.push(`open:${id}`) }
   await new Promise((r) => setTimeout(r, 30))
   if (dirty) { dirty = false; texts = fullRender(el) }
   check('存档-错误清除后警告消失（§12-24）', !texts.join('\n').includes('最近一次自动存档失败'))
+  globalThis.fetch = liveFetch
+}
+
+// ── Restore Reliability v0.2：duplicate exact ref + 成功锁定态 + 保护档折叠区（§13，stub 应答）──
+{
+  const liveFetch = globalThis.fetch
+  const dupA = { id: 'SAVE-04', ref: 'SAVE-04_隶义兵籍入张庄共谋', label: '隶义兵籍入张庄共谋', kind: 'milestone', kindLabel: '里程碑', gameTime: '三月初六', createdAt: null, restorable: true }
+  const dupB = { id: 'SAVE-04', ref: 'SAVE-04_同日另一档', label: '同日另一档', kind: 'manual', kindLabel: '手动', gameTime: '三月初六', createdAt: null, restorable: true }
+  const dupPayload = {
+    game: { id: 'dup-fixture' },
+    saves: [dupA, dupB],
+    protections: [
+      { name: 'PRE-RESTORE-20260825T103501-001', label: '恢复前保护 · 三月初六', gameTime: '三月初六', createdAt: null, restorable: true },
+      { name: 'SAVE-03_恢复前保护 旧时代', label: '恢复前保护 · 旧时代', gameTime: null, createdAt: null, restorable: true }
+    ],
+    policy: null,
+    autoSaveError: null
+  }
+  const restoreOk = { ok: true, restoredRef: dupA.ref, restoredId: 'SAVE-04', restoredLabel: dupA.label, restoredGameTime: dupA.gameTime, requiresNewSession: true }
+  let restoreBody = null
+  globalThis.fetch = async (url, opts) => {
+    const u = String(url)
+    if (u.includes('/restore?')) {
+      order.push('restore')
+      restoreBody = opts?.body ? JSON.parse(opts.body) : null
+      return { json: async () => restoreOk }
+    }
+    if (u.includes('/saves?')) return { json: async () => dupPayload }
+    return liveFetch(url, opts)
+  }
+  switchPage('overview')
+  switchPage('saves')
+  fullRender(el)
+  await new Promise((r) => setTimeout(r, 30))
+  if (dirty) { dirty = false; texts = fullRender(el) }
+  hookIdx = 0
+  dom = expand(el)
+  const dupCards = findByClass(dom, 'twp-save')
+  check('v0.2-duplicate 同编号两卡都渲染', dupCards.length === 2)
+  check(
+    'v0.2-React key 用 exact ref 不冲突',
+    new Set(dupCards.map((c) => c.props.key)).size === 2 &&
+      dupCards.some((c) => c.props.key === dupA.ref) &&
+      dupCards.some((c) => c.props.key === dupB.ref)
+  )
+  check('v0.2-duplicate 两卡各有恢复按钮', dupCards.every((c) => findByClass(c, 'twp-restore').length === 1))
+  check(
+    'v0.2-保护档折叠区计数与说明',
+    texts.join('\n').includes('恢复保护（系统） 2') && texts.join('\n').includes('仅用于回档异常时撤回')
+  )
+
+  // 成功路径：create 挂起 → 锁定中间态必须立刻可见，且不再有任何 Restore 按钮（§8/§13-13）
+  const createOriginal = sessions.create
+  const openOriginal = sessions.open
+  sessions.create = () => new Promise(() => {})
+  const cardA = dupCards.find((c) => {
+    const t = []
+    renderNode(c.children, t)
+    return t.join('').includes(dupA.label)
+  })
+  findByClass(cardA, 'twp-restore')[0].props.onClick()
+  hookIdx = 0
+  dom = expand(el)
+  findByClass(dom, 'twp-restore-do')[0].props.onClick()
+  await new Promise((r) => setTimeout(r, 40))
+  if (dirty) { dirty = false; texts = fullRender(el) }
+  check('v0.2-restore 请求体发送 saveRef', restoreBody?.saveRef === dupA.ref && !('saveId' in (restoreBody ?? {})))
+  check(
+    'v0.2-成功立即锁定中间态（§8）',
+    texts.join('\n').includes('世界已恢复至：隶义兵籍入张庄共谋') && texts.join('\n').includes('正在进入恢复后的新会话')
+  )
+  hookIdx = 0
+  dom = expand(el)
+  check('v0.2-锁定态无 Restore 按钮（§13-13）', findByClass(dom, 'twp-restore').length === 0 && findByClass(dom, 'twp-restore-do').length === 0)
+
+  // fallback：seam 不可用 → §10 文案，且同样不再暴露 Restore 按钮（§13-15/16）
+  sessions.create = undefined
+  sessions.open = undefined
+  switchPage('overview')
+  switchPage('saves')
+  fullRender(el)
+  await new Promise((r) => setTimeout(r, 30))
+  if (dirty) { dirty = false; fullRender(el) }
+  hookIdx = 0
+  dom = expand(el)
+  findByClass(dom, 'twp-restore')[0].props.onClick()
+  hookIdx = 0
+  dom = expand(el)
+  findByClass(dom, 'twp-restore-do')[0].props.onClick()
+  await new Promise((r) => setTimeout(r, 40))
+  if (dirty) { dirty = false; texts = fullRender(el) }
+  check('v0.2-fallback 文案（§10）', texts.join('\n').includes('世界文件已经成功回档') && texts.join('\n').includes('不能继续使用'))
+  hookIdx = 0
+  dom = expand(el)
+  check('v0.2-fallback 无 Restore 按钮（§13-16）', findByClass(dom, 'twp-restore').length === 0 && findByClass(dom, 'twp-restore-do').length === 0)
+  sessions.create = createOriginal
+  sessions.open = openOriginal
   globalThis.fetch = liveFetch
 }
 
