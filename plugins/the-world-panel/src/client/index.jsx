@@ -493,6 +493,8 @@ async function enterFreshSessionAfterRestore(ctx, scope) {
  */
 function SavesPanel({ scope, ctx, gameTime }) {
   const [saves, setSaves] = useState(null)
+  const [policy, setPolicy] = useState(null)
+  const [autoSaveError, setAutoSaveError] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [label, setLabel] = useState('')
@@ -506,6 +508,8 @@ function SavesPanel({ scope, ctx, gameTime }) {
       .then((r) => r.json())
       .then((d) => {
         setSaves(d?.saves ?? [])
+        setPolicy(d?.policy ?? null)
+        setAutoSaveError(d?.autoSaveError ?? null)
         setError(null)
       })
       .catch((e) => setError(`存档列表加载失败：${e?.message ?? e}`))
@@ -593,6 +597,10 @@ function SavesPanel({ scope, ctx, gameTime }) {
       { className: 'twp-card twp-save-now' },
       h('header', { className: 'twp-card-h' }, h('span', { className: 'twp-card-seal' }, '❖'), '当前进度'),
       gameTime ? h('div', { className: 'twp-save-time' }, gameTime) : null,
+      policy ? h('div', { className: 'twp-save-policy' }, `存档策略：${policy}`) : null,
+      autoSaveError
+        ? h('div', { className: 'twp-autosave-warn' }, `最近一次自动存档失败：${autoSaveError}。后台维护仍在继续。`)
+        : null,
       h('input', {
         className: 'twp-save-label',
         placeholder: '存档名（可留空）',
@@ -946,6 +954,10 @@ const CSS = `
 .twp-save-time { font-size: 12px; opacity: 0.7; margin: 2px 0 6px; }
 .twp-save.legacy { opacity: 0.75; }
 .twp-save-legacy-note { font-size: 11.5px; color: #6b5a2a; background: #b8860b14; border-radius: 4px; padding: 5px 8px; margin: 4px 0; }
+/* Save Policy v0.2：策略摘要（不抢眼）与自动存档失败的非侵入式警告 */
+.twp-save-policy { font-size: 11.5px; opacity: 0.75; margin: 0 0 8px; }
+.twp-autosave-warn { font-size: 12px; color: #9e2b25; background: #9e2b2510; border-left: 3px solid #9e2b25;
+  border-radius: 3px; padding: 6px 9px; margin: 0 0 10px; line-height: 1.6; }
 .twp-restore { margin-top: 6px; padding: 4px 14px; border: 1px solid #6b5a2a; border-radius: 4px; cursor: pointer;
   background: none; color: #2b2620; font-size: 12.5px; }
 .twp-restore:not(:disabled):hover { border-color: #9e2b25; color: #9e2b25; background: #9e2b2512; }

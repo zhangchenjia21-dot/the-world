@@ -18,8 +18,9 @@ Gate B 首个 RPG 体验插件：DSH Web 侧边栏中的玩家信息界面，以
 行囊    玩家装备 + 机制仓库类分节的跨 Owner 聚合
 事务    THREADS 按 紧急/进行中/长期 分组 + 系统任务组，保留两步确认归档
 系统    仅当本局存在长期机制时显示（机制显示名 + 状态 + 分节）
-存档    Save / Restore v0.1：手动快照 + 存档列表（类型/游戏内时点/兼容性）+
-        两步确认恢复；恢复后强制进入恢复后出生的全新 Session
+存档    Save / Restore v0.1 + Save Policy v0.2：手动快照 + 存档列表（类型/游戏内时点/兼容性）+
+        两步确认恢复；恢复后强制进入恢复后出生的全新 Session；页首显示当前存档策略摘要，
+        最近一次自动存档失败以非侵入式警告显形（不污染 RPG Chat）
 ```
 
 玩家界面不出现 raw id / 文件路径 / Owner 说明 / `mechanic:` / `source:` 等开发元数据
@@ -62,6 +63,7 @@ lib/index.js            Node 半（手维护 ESM 源码）：/the-world/panel �
                         ├─ events       GET  → SSE（fs.watch 驱动，回合结束后刷新；无轮询）
                         ├─ close-thread POST → 线程归档（DEC-B3 v1.2 窄写口）
                         ├─ saves        GET  → 存档列表元数据（兼容性判定，无真实路径）
+                        │                    + 当前存档策略中文摘要 + 最近一次自动存档失败（若有）
                         ├─ save         POST → 手动确定性快照（label 清洗、编号服务端生成）
                         └─ restore      POST → 快照回档（保护档先行 + 回滚安全 + fresh-session）
 lib/线程归档.js          归档纯函数（THREADS 切块 / LEDGER 追加；CRLF 兼容）

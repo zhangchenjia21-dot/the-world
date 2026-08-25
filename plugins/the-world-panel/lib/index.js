@@ -18,8 +18,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import z from '@deepseek-ai/schemastery'
 import { resolveSessionPreset } from '@deepseek-ai/dsh-agent-presets'
-import { resolveGame, readBounded } from '../../shared/游戏定位.js'
-import { createSnapshot, listSaves, resolveSaveDir, restoreSnapshot, withGameLock } from '../../shared/存档.js'
+import { resolveGame, readBounded, readSavePolicy, describeSavePolicy } from '../../shared/游戏定位.js'
+import { createSnapshot, listSaves, resolveSaveDir, restoreSnapshot, withGameLock, readPolicyState } from '../../shared/存档.js'
 import { cutThreadBlock, appendToLedger, archiveEntry, LEDGER_SEED, THREAD_ID_PATTERN } from './线程归档.js'
 
 export const name = 'the-world-panel'
@@ -379,7 +379,13 @@ export function apply(ctx, config) {
       }
       if (url.pathname.endsWith('/saves')) {
         // GET：枚举存档元数据（不含真实路径 / source session 等内部字段）
-        sendJson(res, 200, { game: { id: game.id }, saves: listSaves(game.dir) })
+        // Save Policy v0.2：附当前策略中文摘要与最近一次自动存档失败（若有），供存档页显形。
+        sendJson(res, 200, {
+          game: { id: game.id },
+          saves: listSaves(game.dir),
+          policy: describeSavePolicy(readSavePolicy(game.dir)),
+          autoSaveError: readPolicyState(game.dir)?.lastAutoSaveError ?? null
+        })
         return
       }
       if (url.pathname.endsWith('/save')) {
