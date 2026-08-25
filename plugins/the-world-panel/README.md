@@ -57,6 +57,8 @@ canonical 状态词如 `active/open` 在显示层本地化为中文）。
 - **真正 snapshot 语义**：恢复是整体替换，不是“覆盖存档里有的文件”——存档时点之后才出现的
   live 文件会被移除；失败时从备份回滚并 fail loud；
 - **idle 门槛**：Agent 生成中保存/恢复都被拒绝（client UX guard + host 侧 `agents` 状态权威检查）；
+- **Windows 句柄防护**：面板 SSE 的 fs.watch 会持有 live 目录句柄（被监视目录 renameSync 必 EPERM），
+  restore 期间先释放本进程监视器、结束后重挂并补发 refresh；rename 对瞬时 EPERM/EBUSY 小退避重试；
 - **fresh-session 边界**：restore 成功响应带 exact target（restoredRef/Id/Label/GameTime），客户端
   立刻锁成全页「世界已恢复至…」成功态（不再暴露任何 Restore 按钮），随后用
   `ctx.sessions.create({ workspaceId })` 显式创建恢复后出生的全新 Session 并 `open` 切换；

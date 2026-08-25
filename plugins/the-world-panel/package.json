@@ -1,6 +1,6 @@
 {
   "name": "the-world-panel",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "The World 游戏面板（Gate B 首个 RPG 体验插件）：better-sidebar 宿主的玩家信息界面（概览/角色/人物/行囊/事务/系统/存档），view model 为 game workspace 的瞬时投影，写口为 /close-thread 归档与 /save、/restore 确定性快照。",
   "type": "module",
   "main": "lib/index.js",

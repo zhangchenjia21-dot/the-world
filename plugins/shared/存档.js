@@ -225,6 +225,23 @@ function removeDirRecursive(targetDir, { force = false } = {}) {
   fs.rmdirSync(targetDir)
 }
 
+/**
+ * Windows 上目录句柄（杀软 / 索引器）可能造成瞬时 EPERM/EBUSY：rename 小退避重试。
+ * 注意：活跃的 fs.watch 句柄不是瞬时占用——调用方（Panel）必须在 restore 期间
+ * 先释放自己的监视器，否则重试无用（实测：被 fs.watch 的目录 renameSync 必 EPERM）。
+ */
+function renameSyncWithRetry(from, to, attempts = 5) {
+  const sab = new Int32Array(new SharedArrayBuffer(4))
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return fs.renameSync(from, to)
+    } catch (error) {
+      if ((error.code !== 'EPERM' && error.code !== 'EBUSY') || attempt >= attempts - 1) throw error
+      Atomics.wait(sab, 0, 0, 60)
+    }
+  }
+}
+
 function copySnapshotContents(sourceDir, targetDir) {
   fs.mkdirSync(targetDir, { recursive: true })
   for (const entry of SNAPSHOT_ENTRIES) {
@@ -448,7 +465,7 @@ export function restoreSnapshot(gameDir, saveDir) {
     for (const entry of SNAPSHOT_ENTRIES) {
       const livePath = path.join(gameDir, entry)
       try {
-        fs.renameSync(livePath, path.join(backupDir, entry))
+        renameSyncWithRetry(livePath, path.join(backupDir, entry))
         moved.push(entry)
       } catch (error) {
         if (error.code !== 'ENOENT') throw error
@@ -457,7 +474,7 @@ export function restoreSnapshot(gameDir, saveDir) {
     for (const entry of SNAPSHOT_ENTRIES) {
       const stagedPath = path.join(stagingDir, entry)
       try {
-        fs.renameSync(stagedPath, path.join(gameDir, entry))
+        renameSyncWithRetry(stagedPath, path.join(gameDir, entry))
         installed.push(entry)
       } catch (error) {
         if (error.code !== 'ENOENT') throw error
@@ -469,14 +486,14 @@ export function restoreSnapshot(gameDir, saveDir) {
     const rollbackErrors = []
     for (const entry of installed.reverse()) {
       try {
-        fs.renameSync(path.join(gameDir, entry), path.join(stagingDir, `rolled-${entry}`))
+        renameSyncWithRetry(path.join(gameDir, entry), path.join(stagingDir, `rolled-${entry}`))
       } catch (rollbackError) {
         rollbackErrors.push(rollbackError)
       }
     }
     for (const entry of moved.reverse()) {
       try {
-        fs.renameSync(path.join(backupDir, entry), path.join(gameDir, entry))
+        renameSyncWithRetry(path.join(backupDir, entry), path.join(gameDir, entry))
       } catch (rollbackError) {
         rollbackErrors.push(rollbackError)
       }

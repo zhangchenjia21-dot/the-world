@@ -666,3 +666,31 @@ test('rollback 不完整时保留 protection 与恢复材料（§7.3/§13-10）'
   const leftovers = fs.readdirSync(gameDir).filter((name) => name.startsWith('.restore-'))
   assert.ok(leftovers.length > 0, 'staging/backup 恢复材料必须保留供人工恢复')
 })
+
+test('restore 时 rename 瞬时 EPERM 重试后成功（Windows 目录句柄占用）', () => {
+  const gameDir = makeGameDir()
+  const target = createSnapshot(gameDir, { kind: 'manual', label: '目标档' })
+  fs.writeFileSync(path.join(gameDir, 'state', 'CURRENT.md'), '# CURRENT\n\n- 时间: T5\n', 'utf8')
+  const originalRename = fs.renameSync
+  let epermCount = 0
+  fs.renameSync = (from, to) => {
+    if (epermCount < 2 && path.basename(from) === 'state' && String(to).includes('.restore-backup-')) {
+      epermCount += 1
+      const error = new Error('注入瞬时 EPERM')
+      error.code = 'EPERM'
+      throw error
+    }
+    return originalRename(from, to)
+  }
+  try {
+    restoreSnapshot(gameDir, resolveSaveRef(gameDir, target.ref))
+  } finally {
+    fs.renameSync = originalRename
+  }
+  assert.equal(epermCount, 2, '重试必须真的发生')
+  assert.equal(
+    read(path.join(gameDir, 'state', 'CURRENT.md')),
+    '# CURRENT\n\n- 时间: 中平元年三月初十夜\n- 当前位置: 巨鹿城内\n',
+    '瞬时句柄占用下 restore 最终成功'
+  )
+})

@@ -311,6 +311,8 @@ async function handleRestore(ctx, game, sessionId, req, res) {
     return
   }
 
+  // Windows：restore 要 rename live 目录，先释放本进程 SSE 监视器持有的目录句柄，结束后恢复
+  const resumeWatchers = suspendSseWatchers(game.dir)
   try {
     const save = withGameLock(game.dir, () => restoreSnapshot(game.dir, saveDir))
     // 成功响应必须带 exact target 信息（§9）：客户端据此告诉玩家文件层恢复到了哪一份
@@ -325,6 +327,8 @@ async function handleRestore(ctx, game, sessionId, req, res) {
   } catch (error) {
     const status = error.code === 'busy' || error.code === 'save-incompatible' ? 409 : error.code === 'save-not-found' ? 404 : 500
     sendJson(res, status, { ok: false, error: error.code ?? 'restore-failed', message: error.message })
+  } finally {
+    resumeWatchers()
   }
 }
 
@@ -339,6 +343,37 @@ function watchDirs(gameDir) {
     // mechanics/ 可不存在
   }
   return dirs
+}
+
+/**
+ * 活动 SSE 监视器注册表（resolved gameDir → 各连接的 { close, resume }）。
+ * Windows 实测：被 fs.watch 监视的目录 renameSync 必 EPERM——restore 要搬动 live 目录，
+ * 期间必须先释放本进程持有的监视器，结束后恢复并补发一次 refresh。
+ */
+const sseWatchRegistry = new Map()
+
+function registerSseWatchers(gameDir, entry) {
+  const key = path.resolve(gameDir)
+  let set = sseWatchRegistry.get(key)
+  if (!set) {
+    set = new Set()
+    sseWatchRegistry.set(key, set)
+  }
+  set.add(entry)
+  return () => {
+    set.delete(entry)
+    if (set.size === 0) sseWatchRegistry.delete(key)
+  }
+}
+
+/** restore 期间释放该 game 的全部 SSE 监视器；返回恢复函数（重挂 + 补发 refresh）。 */
+function suspendSseWatchers(gameDir) {
+  const set = sseWatchRegistry.get(path.resolve(gameDir))
+  if (!set) return () => {}
+  for (const entry of set) entry.close()
+  return () => {
+    for (const entry of set) entry.resume()
+  }
 }
 
 function handleEvents(ctx, config, game, req, res) {
@@ -365,9 +400,12 @@ function handleEvents(ctx, config, game, req, res) {
       }
     }, config.watchDebounceMs)
   }
-  function arm() {
+  const closeWatchers = () => {
     for (const watcher of watchers) watcher.close()
     watchers = []
+  }
+  function arm() {
+    closeWatchers()
     for (const dir of watchDirs(game.dir)) {
       try {
         watchers.push(fs.watch(dir, { persistent: false }, onChange))
@@ -376,11 +414,19 @@ function handleEvents(ctx, config, game, req, res) {
       }
     }
   }
+  const entry = {
+    close: closeWatchers,
+    resume: () => {
+      arm()
+      onChange() // restore 后世界已整体替换：补发一次 debounced refresh
+    }
+  }
+  const unregister = registerSseWatchers(game.dir, entry)
   arm()
   req.on('close', () => {
+    unregister()
     if (timer) clearTimeout(timer)
-    for (const watcher of watchers) watcher.close()
-    watchers = []
+    closeWatchers()
   })
 }
 
