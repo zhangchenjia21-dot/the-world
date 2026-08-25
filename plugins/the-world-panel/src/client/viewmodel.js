@@ -215,39 +215,78 @@ export function mechanicStatus(text) {
 export function parsePeopleIndex(text) {
   if (!text) return []
   const lines = text.split(/\r?\n/).filter((l) => /^\s*\|/.test(l))
-  if (lines.length < 2) return []
-  const headerCells = lines[0].split('|').slice(1, -1).map((c) => c.trim())
-  const col = (patterns) => headerCells.findIndex((h) => patterns.some((p) => h.includes(p)))
-  const idx = {
-    name: col(['姓名', '名称', '名字']),
-    status: col(['状态']),
-    location: col(['位置', '所在']),
-    affiliation: col(['所属', '阵营', '势力']),
-    relation: col(['关系']),
-    lastSeen: col(['最后确认', '确认', '更新'])
+  const tableRows = []
+  if (lines.length >= 2) {
+    const headerCells = lines[0].split('|').slice(1, -1).map((c) => c.trim())
+    const col = (patterns) => headerCells.findIndex((h) => patterns.some((p) => h.includes(p)))
+    const idx = {
+      name: col(['姓名', '名称', '名字']),
+      status: col(['状态']),
+      location: col(['位置', '所在']),
+      affiliation: col(['所属', '阵营', '势力']),
+      relation: col(['关系']),
+      lastSeen: col(['最后确认', '确认', '更新'])
+    }
+    for (const line of lines.slice(1)) {
+      if (/^\s*\|[\s\-:|]+\|?\s*$/.test(line)) continue // 分隔行
+      const cells = line.split('|').slice(1, -1).map((c) => c.trim())
+      if (cells.length < 2) continue
+      const idCell = cells[0] ?? ''
+      const link = /\[([^\]]*)\]\(([^)]*)\)/.exec(idCell)
+      const id = (link ? link[2] : idCell).replace(/\.md$/, '').trim()
+      const get = (i) => (i >= 0 && i < cells.length ? cells[i] : '')
+      const name = cleanDisplay(get(idx.name)) || cleanDisplay(link?.[1] ?? '') || id
+      if (!name && !id) continue
+      tableRows.push({
+        id,
+        name,
+        status: cleanDisplay(get(idx.status)),
+        location: cleanDisplay(get(idx.location)),
+        affiliation: cleanDisplay(get(idx.affiliation)),
+        relation: cleanDisplay(get(idx.relation)),
+        lastSeen: cleanDisplay(get(idx.lastSeen))
+      })
+    }
   }
+  if (tableRows.length) return tableRows
+  return parsePeopleList(text)
+}
+
+/**
+ * 列表式名录（GM 另一种书写习惯）：## 分组标题 + `- [姓名](char-x.md)——备注`。
+ * 分组标题进 status（决定分类桶），备注进 relation；未链接的口头提及不入册。
+ * 备注里的线程引用（（T-1））是开发元数据，剥掉。
+ */
+function parsePeopleList(text) {
   const rows = []
-  for (const line of lines.slice(1)) {
-    if (/^\s*\|[\s\-:|]+\|?\s*$/.test(line)) continue // 分隔行
-    const cells = line.split('|').slice(1, -1).map((c) => c.trim())
-    if (cells.length < 2) continue
-    const idCell = cells[0] ?? ''
-    const link = /\[([^\]]*)\]\(([^)]*)\)/.exec(idCell)
-    const id = (link ? link[2] : idCell).replace(/\.md$/, '').trim()
-    const get = (i) => (i >= 0 && i < cells.length ? cells[i] : '')
-    const name = cleanDisplay(get(idx.name)) || cleanDisplay(link?.[1] ?? '') || id
-    if (!name && !id) continue
-    rows.push({
-      id,
-      name,
-      status: cleanDisplay(get(idx.status)),
-      location: cleanDisplay(get(idx.location)),
-      affiliation: cleanDisplay(get(idx.affiliation)),
-      relation: cleanDisplay(get(idx.relation)),
-      lastSeen: cleanDisplay(get(idx.lastSeen))
-    })
+  let section = ''
+  for (const line of (text ?? '').split(/\r?\n/)) {
+    const heading = /^#{2,4}\s+(.+)$/.exec(line)
+    if (heading) {
+      section = heading[1].trim()
+      continue
+    }
+    const entry = /^\s*[-*]\s+\[([^\]]+)\]\(([^)]*)\)\s*(.*)$/.exec(line)
+    if (!entry) continue
+    const id = entry[2].replace(/\.md$/, '').trim()
+    const note = cleanDisplay(entry[3].replace(/^[—–-]+\s*/, '').replace(/[（(]T-[\w-]+[）)]/g, ''))
+    rows.push({ id, name: entry[1].trim(), status: section, location: '', affiliation: '', relation: note, lastSeen: '' })
   }
   return rows
+}
+
+/**
+ * 从角色档案正文提取显示名：优先 `# 题名：名字` 后段，否则 H1 括号/竖线前段
+ * （如 `# 杜横（樊氏家奴头目）` → 杜横）。拿不到返回 null，由调用方决定兜底——
+ * 玩家界面任何路径都不该落到 char-* raw id。
+ */
+export function charDisplayName(text) {
+  const { body } = splitDoc(text ?? '')
+  const named = displayNameOf(body, null)
+  if (named) return named
+  const h1 = /^#\s+(.+)$/m.exec(body)?.[1]?.trim()
+  if (!h1) return null
+  return h1.split(/[（(｜|:：]/)[0].trim() || null
 }
 
 /** 人物分类桶：全部仍是属性/视图，不改 characters/ 存储结构。 */

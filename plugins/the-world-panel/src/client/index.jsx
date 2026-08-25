@@ -31,6 +31,7 @@ import {
   characterView,
   heroIdentity,
   heroFacts,
+  charDisplayName,
   buildOverview,
   worldName
 } from './viewmodel.js'
@@ -241,12 +242,13 @@ function PeoplePanel({ indexText, characters, nearby }) {
   const people = useMemo(() => parsePeopleIndex(indexText), [indexText])
   const detailOf = (id) => (characters ?? []).find((c) => c.id === id)?.text
 
-  // INDEX 缺失时退回 characters/ 文件名册（只有名字，没有表格属性）
+  // INDEX 缺失时退回 characters/ 文件名册（只有名字，没有表格属性）；
+  // 名字从档案正文 H1 提取（charDisplayName），绝不落到 char-* raw id
   const rows = people.length
     ? people
     : (characters ?? []).map((c) => {
-        const { meta, body } = splitDoc(c.text ?? '')
-        return { id: c.id, name: meta.find(([k]) => k === '姓名')?.[1] ?? c.id, status: '', location: '', affiliation: '', relation: '', lastSeen: '' }
+        const { meta } = splitDoc(c.text ?? '')
+        return { id: c.id, name: meta.find(([k]) => k === '姓名')?.[1] ?? charDisplayName(c.text) ?? '未命名', status: '', location: '', affiliation: '', relation: '', lastSeen: '' }
       })
 
   if (rows.length === 0) return h('div', { className: 'twp-empty' }, '（暂无人物档案）')

@@ -10,6 +10,7 @@ import {
   localizeStatus,
   heroIdentity,
   heroFacts,
+  charDisplayName,
   parsePeopleIndex,
   personBuckets,
   parseThreads,
@@ -267,4 +268,30 @@ test('A3：Hero 摘要只取加粗身份短语与短事实行，不塞整段社�
   assert.equal(heroFacts(sections), '31 岁，女')
   // Hero 不承担完整社会身份长段
   assert.ok(identity.join('').length < 20)
+})
+
+test('人物名录兼容列表式 INDEX：姓名入册、分组进状态、线程引用剥离', () => {
+  const LIST_INDEX = `# characters｜人物名录
+
+## 敌对
+
+- [杜横](char-duheng.md)——樊氏家奴头目，断臂之仇（T-1）
+
+## 未建档
+
+- 樊敬——涿郡豪族樊氏家主（出场再立）
+`
+  const people = parsePeopleIndex(LIST_INDEX)
+  assert.equal(people.length, 1) // 未链接的口头提及不入册
+  assert.equal(people[0].name, '杜横')
+  assert.equal(people[0].id, 'char-duheng') // id 只用于内部档案关联
+  assert.equal(people[0].status, '敌对')
+  assert.ok(!people[0].relation.includes('T-1'))
+  assert.ok(personBuckets(people[0]).includes('hostile'))
+})
+
+test('charDisplayName：H1 括号前段 / 题名冒号后段，拿不到返回 null', () => {
+  assert.equal(charDisplayName('---\nentity: char-duheng\n---\n\n# 杜横（樊氏家奴头目）\n'), '杜横')
+  assert.equal(charDisplayName('# 星港｜人物：老灶\n'), '老灶')
+  assert.equal(charDisplayName('没有标题'), null)
 })
