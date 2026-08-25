@@ -5,8 +5,8 @@
  * - 纯 Node fs，不依赖 cordis，可独立用 node --test 覆盖；
  * - 快照只含 COMPOSITION.md + state/ mechanics/ story/ memory/，永不碰 saves/ 与 library/；
  * - restore 是真正 snapshot 语义（整体替换），不是“覆盖存档里有的文件”；
- * - 失败安全：先完整验证源 → 先建 pre-restore 保护档 → staging 组装 → 原子就位，
- *   任何中途异常都从 backup 回滚并 fail loud。
+ * - 失败安全：先完整验证源 → 先建 pre-restore 保护档 → staging 组装 → 原子就位；
+ *   中途异常优先从 backup 回滚，回滚不完整时保留恢复材料并 fail loud。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -29,6 +29,7 @@ export const REQUIRED_STRUCTURE = [
 
 const SAVE_DIR_PATTERN = /^(SAVE-\d+)(?:_(.+))?$/
 const META_FILE = 'META.md'
+const MAX_AUTO_SAVES = 5
 
 /** 存档类型 → 玩家可见中文标签。 */
 const KIND_LABELS = {
@@ -180,6 +181,30 @@ function copyDirRecursive(from, to) {
   }
 }
 
+/**
+ * Node v24 的 Windows rmSync(recursive) 在中文目录上可能直接终止进程；
+ * 只对存档服务已经精确定位的目录做不跟随符号链接的深度删除。
+ */
+function removeDirRecursive(targetDir, { force = false } = {}) {
+  let stat
+  try {
+    stat = fs.lstatSync(targetDir)
+  } catch (error) {
+    if (force && error.code === 'ENOENT') return
+    throw error
+  }
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    fs.unlinkSync(targetDir)
+    return
+  }
+  for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+    const child = path.join(targetDir, entry.name)
+    if (entry.isDirectory() && !entry.isSymbolicLink()) removeDirRecursive(child)
+    else fs.unlinkSync(child)
+  }
+  fs.rmdirSync(targetDir)
+}
+
 function copySnapshotContents(sourceDir, targetDir) {
   fs.mkdirSync(targetDir, { recursive: true })
   for (const entry of SNAPSHOT_ENTRIES) {
@@ -195,6 +220,35 @@ function copySnapshotContents(sourceDir, targetDir) {
       if (error.code === 'ENOENT') continue // 可选目录缺失不视为失败
       throw error
     }
+  }
+}
+
+/**
+ * 新恢复点必须从完整 live workspace 建立；这里验证的是恢复能力底线，
+ * 不负责替玩家或模型补齐缺失 Owner。
+ */
+function assertWorkspaceComplete(gameDir) {
+  const missing = REQUIRED_STRUCTURE.filter((relative) => {
+    try {
+      return !fs.statSync(path.join(gameDir, relative)).isFile()
+    } catch {
+      return true
+    }
+  })
+  if (missing.length === 0) return
+
+  const error = new Error(`游戏工作区不完整，无法建立可恢复存档：缺少 ${missing.map((item) => item.replace(/\\/g, '/')).join('、')}`)
+  error.code = 'workspace-incomplete'
+  throw error
+}
+
+/** 自动档只滚动同类快照；manual / milestone / pre-restore 永不在这里删除。 */
+function rotateAutoSnapshots(gameDir) {
+  const autos = listSaves(gameDir).filter((save) => save.kind === 'auto-checkpoint')
+  const excess = autos.slice(0, Math.max(0, autos.length - MAX_AUTO_SAVES))
+  for (const save of excess) {
+    const saveDir = resolveSaveDir(gameDir, save.id)
+    if (saveDir) removeDirRecursive(saveDir)
   }
 }
 
@@ -216,8 +270,12 @@ function buildMeta({ saveId, kind, gameTime, label, sourceSession }) {
 /**
  * 创建快照。kind ∈ manual / auto-checkpoint / milestone / pre-restore。
  * 目录编号由服务端生成；label 只做展示与目录后缀，先清洗（B6）。
+ * 前提：live workspace 满足 REQUIRED_STRUCTURE；否则抛 workspace-incomplete，零存档 mutation。
+ * auto-checkpoint 成功后只滚动同类快照，最多保留最近 5 个。
  */
 export function createSnapshot(gameDir, { kind = 'manual', label, sourceSession } = {}) {
+  // 必须早于 saves/ mkdir 与编号分配，失败时不得改变既有存档集合。
+  assertWorkspaceComplete(gameDir)
   const safeLabel = sanitizeLabel(label)
   const saveId = nextSaveId(gameDir)
   const savesDir = path.join(gameDir, 'saves')
@@ -228,9 +286,10 @@ export function createSnapshot(gameDir, { kind = 'manual', label, sourceSession 
   try {
     copySnapshotContents(gameDir, targetDir)
     fs.writeFileSync(path.join(targetDir, META_FILE), buildMeta({ saveId, kind, gameTime, label: safeLabel, sourceSession }), 'utf8')
+    if (kind === 'auto-checkpoint') rotateAutoSnapshots(gameDir)
   } catch (error) {
     // 半成品目录不能留下——下次编号/列表都不该看到残缺快照
-    fs.rmSync(targetDir, { recursive: true, force: true })
+    removeDirRecursive(targetDir, { force: true })
     throw error
   }
   return inspectSave(targetDir)
@@ -270,6 +329,8 @@ export function restoreSnapshot(gameDir, saveDir) {
   const stagingDir = path.join(gameDir, `.restore-staging-${Date.now()}`)
   const backupDir = path.join(gameDir, `.restore-backup-${Date.now()}`)
   const moved = []
+  const installed = []
+  let preserveRecoveryDirs = false
   try {
     fs.mkdirSync(stagingDir, { recursive: true })
     copySnapshotContents(saveDir, stagingDir)
@@ -288,34 +349,42 @@ export function restoreSnapshot(gameDir, saveDir) {
       const stagedPath = path.join(stagingDir, entry)
       try {
         fs.renameSync(stagedPath, path.join(gameDir, entry))
+        installed.push(entry)
       } catch (error) {
         if (error.code !== 'ENOENT') throw error
       }
     }
-    fs.rmSync(backupDir, { recursive: true, force: true })
+    removeDirRecursive(backupDir, { force: true })
   } catch (error) {
-    // 回滚：staging 已在位的先挪走，再把 backup 放回 live
-    for (const entry of SNAPSHOT_ENTRIES) {
+    // 只移走已经安装的新条目；备份阶段尚未移动的 live 条目必须原地保留。
+    const rollbackErrors = []
+    for (const entry of installed.reverse()) {
       try {
         fs.renameSync(path.join(gameDir, entry), path.join(stagingDir, `rolled-${entry}`))
-      } catch {
-        // live 上未必有该条目
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError)
       }
     }
-    for (const entry of moved) {
+    for (const entry of moved.reverse()) {
       try {
         fs.renameSync(path.join(backupDir, entry), path.join(gameDir, entry))
-      } catch {
-        // 尽力恢复；原始错误仍会抛出
+      } catch (rollbackError) {
+        rollbackErrors.push(rollbackError)
       }
     }
-    const loud = new Error(`恢复失败，已尽力回滚到恢复前状态：${error.message}`)
+    preserveRecoveryDirs = rollbackErrors.length > 0
+    const rollbackState = preserveRecoveryDirs
+      ? '自动回滚未完整完成，已保留 staging/backup 供人工恢复'
+      : '已回滚到恢复前状态'
+    const loud = new Error(`恢复失败，${rollbackState}：${error.message}`)
     loud.code = 'restore-failed'
     loud.cause = error
     throw loud
   } finally {
-    fs.rmSync(stagingDir, { recursive: true, force: true })
-    fs.rmSync(backupDir, { recursive: true, force: true })
+    if (!preserveRecoveryDirs) {
+      removeDirRecursive(stagingDir, { force: true })
+      removeDirRecursive(backupDir, { force: true })
+    }
   }
   return info
 }

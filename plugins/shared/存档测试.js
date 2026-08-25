@@ -91,6 +91,43 @@ test('manual snapshot 内容完整且带 frontmatter META（§12.2-2）', () => 
   assert.equal(meta.label, '暗查内坊开局')
 })
 
+test('incomplete live workspace 无法创建新快照，且不修改已有存档', () => {
+  const gameDir = makeGameDir()
+  const existing = createSnapshot(gameDir, { kind: 'manual', label: '已有存档' })
+  const existingDir = resolveSaveDir(gameDir, existing.id)
+  const existingMeta = read(path.join(existingDir, 'META.md'))
+  fs.rmSync(path.join(gameDir, 'state', 'PLAYER.md'))
+
+  assert.throws(
+    () => createSnapshot(gameDir, { kind: 'manual', label: '不可恢复的新档' }),
+    (error) => error?.code === 'workspace-incomplete'
+  )
+  assert.deepEqual(listSaves(gameDir).map((save) => save.id), [existing.id])
+  assert.equal(read(path.join(existingDir, 'META.md')), existingMeta)
+})
+
+test('自动档最多保留最近 5 个，不删除 manual / milestone / pre-restore', () => {
+  const gameDir = makeGameDir()
+  const protectedKinds = [
+    createSnapshot(gameDir, { kind: 'manual', label: '手动档' }),
+    createSnapshot(gameDir, { kind: 'milestone', label: '里程碑' }),
+    createSnapshot(gameDir, { kind: 'pre-restore', label: '保护档' })
+  ]
+  for (let turn = 1; turn <= 7; turn += 1) {
+    createSnapshot(gameDir, { kind: 'auto-checkpoint', label: `第 ${turn} 玩家回合自动存档` })
+  }
+
+  const saves = listSaves(gameDir)
+  assert.equal(saves.filter((save) => save.kind === 'auto-checkpoint').length, 5)
+  for (const save of protectedKinds) {
+    assert.ok(saves.some((candidate) => candidate.id === save.id && candidate.kind === save.kind))
+  }
+  assert.deepEqual(
+    saves.filter((save) => save.kind === 'auto-checkpoint').map((save) => save.label),
+    [3, 4, 5, 6, 7].map((turn) => `第 ${turn} 玩家回合自动存档`)
+  )
+})
+
 test('saves/ 不递归复制进 save（§12.2-3）', () => {
   const gameDir = makeGameDir()
   createSnapshot(gameDir, { kind: 'manual', label: '第一份' })
@@ -150,6 +187,23 @@ test('restore 前生成 pre-restore protection save（§12.2-6）', () => {
   assert.match(protection.label, /恢复前保护/)
 })
 
+test('pre-restore protection 创建失败时 live workspace 零 mutation', () => {
+  const gameDir = makeGameDir()
+  const target = createSnapshot(gameDir, { kind: 'manual', label: '目标档' })
+  const currentPath = path.join(gameDir, 'state', 'CURRENT.md')
+  fs.writeFileSync(currentPath, '# CURRENT\n\n- 时间: T5\n', 'utf8')
+  fs.rmSync(path.join(gameDir, 'state', 'PLAYER.md'))
+  const beforeCurrent = read(currentPath)
+  const beforeSaveIds = listSaves(gameDir).map((save) => save.id)
+
+  assert.throws(
+    () => restoreSnapshot(gameDir, resolveSaveDir(gameDir, target.id)),
+    (error) => error?.code === 'workspace-incomplete'
+  )
+  assert.equal(read(currentPath), beforeCurrent)
+  assert.deepEqual(listSaves(gameDir).map((save) => save.id), beforeSaveIds)
+})
+
 test('snapshot restore 删除 T5-only live 文件（§12.2-7）', () => {
   const gameDir = makeGameDir()
   const target = createSnapshot(gameDir, { kind: 'manual', label: 'T2时点' })
@@ -163,6 +217,67 @@ test('snapshot restore 删除 T5-only live 文件（§12.2-7）', () => {
 
   assert.equal(fs.existsSync(t5Only), false, 'T5-only 文件必须消失')
   assert.equal(read(path.join(gameDir, 'memory', 'DELTAS.md')), '# memory/DELTAS.md\n', 'DELTAS 必须回到存档时点')
+})
+
+test('backup rename 中途失败不会移走尚未备份的 live 条目', () => {
+  const gameDir = makeGameDir()
+  const target = createSnapshot(gameDir, { kind: 'manual', label: '目标档' })
+  fs.writeFileSync(path.join(gameDir, 'state', 'CURRENT.md'), '# CURRENT\n\n- 时间: T5\n', 'utf8')
+  fs.writeFileSync(path.join(gameDir, 'story', 'T5-only.md'), '# T5\n', 'utf8')
+  const before = new Map(REQUIRED_STRUCTURE.map((relative) => [relative, read(path.join(gameDir, relative))]))
+  const originalRename = fs.renameSync
+  let injected = false
+  fs.renameSync = (from, to) => {
+    if (!injected && from === path.join(gameDir, 'state') && String(to).includes('.restore-backup-')) {
+      injected = true
+      const error = new Error('注入 backup rename 失败')
+      error.code = 'EACCES'
+      throw error
+    }
+    return originalRename(from, to)
+  }
+  try {
+    assert.throws(
+      () => restoreSnapshot(gameDir, resolveSaveDir(gameDir, target.id)),
+      (error) => error?.code === 'restore-failed'
+    )
+  } finally {
+    fs.renameSync = originalRename
+  }
+
+  assert.equal(injected, true)
+  for (const [relative, content] of before) assert.equal(read(path.join(gameDir, relative)), content, relative)
+  assert.equal(read(path.join(gameDir, 'story', 'T5-only.md')), '# T5\n')
+})
+
+test('staging rename 中途失败会移除已安装快照并完整恢复旧 live', () => {
+  const gameDir = makeGameDir()
+  const target = createSnapshot(gameDir, { kind: 'manual', label: '目标档' })
+  fs.writeFileSync(path.join(gameDir, 'state', 'CURRENT.md'), '# CURRENT\n\n- 时间: T5\n', 'utf8')
+  fs.writeFileSync(path.join(gameDir, 'memory', 'DELTAS.md'), '# DELTAS\nT5 新事实\n', 'utf8')
+  const before = new Map(REQUIRED_STRUCTURE.map((relative) => [relative, read(path.join(gameDir, relative))]))
+  const originalRename = fs.renameSync
+  let injected = false
+  fs.renameSync = (from, to) => {
+    if (!injected && path.basename(from) === 'state' && String(from).includes('.restore-staging-')) {
+      injected = true
+      const error = new Error('注入 staging rename 失败')
+      error.code = 'EACCES'
+      throw error
+    }
+    return originalRename(from, to)
+  }
+  try {
+    assert.throws(
+      () => restoreSnapshot(gameDir, resolveSaveDir(gameDir, target.id)),
+      (error) => error?.code === 'restore-failed'
+    )
+  } finally {
+    fs.renameSync = originalRename
+  }
+
+  assert.equal(injected, true)
+  for (const [relative, content] of before) assert.equal(read(path.join(gameDir, relative)), content, relative)
 })
 
 test('saves/ 本身在 restore 后原样保留（§12.2-8）', () => {
