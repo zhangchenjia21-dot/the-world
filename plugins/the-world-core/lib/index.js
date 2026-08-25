@@ -6,7 +6,8 @@
  * - Setup 的有限选择优先走 DSH 原生 ask_user_question；
  * - 已确认游戏会在新 Session 恢复；
  * - 正式游戏每轮结束会做一次 durable-change / choice-UI review；
- * - 自动存档策略在检查点归并 step 完成后调用 shared 确定性快照；
+ * - 自动存档策略（每 N 玩家回合 / 里程碑）在检查点归并 step 完成后调用 shared 确定性快照，
+ *   回合计数持久化在 saves/POLICY_STATE.json，跨 Session 连续；
  * - 具体世界内容、叙事和文件语义仍交给模型。
  */
 import z from '@deepseek-ai/schemastery'
@@ -16,7 +17,7 @@ import {
   readGameDynamics,
   readBounded,
   readCompositionStatus,
-  readSavePolicyInterval,
+  readSavePolicy,
   COMPOSITION_FILE
 } from '../../shared/游戏定位.js'
 import {
@@ -30,7 +31,15 @@ import {
   buildConsolidationText
 } from './提示文本.js'
 import path from 'node:path'
-import { createSnapshot, withGameLock } from '../../shared/存档.js'
+import {
+  createSnapshot,
+  withGameLock,
+  readPolicyState,
+  recordPlayerTurn,
+  recordAutoSaveSuccess,
+  recordAutoSaveFailure,
+  markMilestone
+} from '../../shared/存档.js'
 
 export const name = 'the-world-core'
 export const inject = ['systemPrompt']
@@ -147,10 +156,8 @@ export function apply(ctx, config) {
   // 只记录已经 steer consolidation、尚未经过第二次 stopping 的自动档；
   // aborted turn 会清除，避免把未完成维护的状态延后误存。
   const pendingAutoSaves = new WeakMap()
-  // 玩家回合计数：只用于决定何时把「delta 捕获」升级为「检查点归并」。
-  // 计数器随 Session 生命周期，不追求跨 Session 精确——DELTAS.md 本身是持久事实源，
-  // 归并早一点晚一点都不丢事实。
-  const playerTurnCounts = new WeakMap()
+  // Save Policy v0.2：权威回合计数持久化在 saves/POLICY_STATE.json（shared/存档.js），
+  // 跨 Session 连续、Restore 不回滚；pendingAutoSaves 只记进程内「已 steer 归并、待第二次 stopping 建档」的时序。
 
   ctx.on('agent/turn-stopping', ({ agent, turn, signal }) => {
     if (signal?.aborted) {
@@ -180,41 +187,95 @@ export function apply(ctx, config) {
         maintainedTurns.set(agent, turns)
       }
       if (turns.has(turn)) {
-        const pending = pendingAutoSaves.get(agent)?.get(turn)
-        if (!pending) return
-
         // 同一 turn 的第二次 stopping 只会发生在 steer 的 maintenance step 完成后。
         // 在此之前绝不建档，避免把尚未归并的 checkpoint 状态固化为恢复点。
-        pendingAutoSaves.get(agent).delete(turn)
-        withGameLock(pending.gameDir, () => createSnapshot(pending.gameDir, {
-          kind: 'auto-checkpoint',
-          label: `第 ${pending.playerTurns} 玩家回合自动存档`,
-          sourceSession: agent.id
-        }))
+        const policy = readSavePolicy(game.dir)
+        const pending = pendingAutoSaves.get(agent)?.get(turn)
+        // 里程碑可能在 maintenance review 中才由模型 signal：这里重新读簿记，不只靠 first stopping 的快照。
+        const milestone = policy.milestone
+          ? (pending?.milestone ?? readPolicyState(game.dir)?.pendingMilestone ?? null)
+          : null
+        if (!pending && !milestone) return
+        if (pending) pendingAutoSaves.get(agent).delete(turn)
+
+        // §8.3 hybrid：interval due 与 milestone 同 turn 只建一个 milestone 档；
+        // 成功后 intervalProgress 重置（milestone 同样视为定期安全点已满足）。
+        const kind = milestone ? 'milestone' : 'auto-checkpoint'
+        const label = milestone ? milestone.label : `第 ${pending.playerTurns} 玩家回合自动存档`
+        try {
+          withGameLock(game.dir, () => createSnapshot(game.dir, { kind, label, sourceSession: agent.id }))
+          recordAutoSaveSuccess(game.dir, policy)
+        } catch (saveError) {
+          // 失败必须可发现且可重试：不清 intervalProgress、不丢 pending milestone，
+          // 下一安全回合再试；错误只写入 POLICY_STATE 供 Panel 显形，不污染 RPG Chat。
+          recordAutoSaveFailure(game.dir, policy, saveError?.message ?? saveError)
+          logger.warn('自动存档失败（已记录，下一安全回合重试）: %s', saveError?.message ?? saveError)
+        }
         return
       }
       turns.add(turn)
 
-      const playerTurns = (playerTurnCounts.get(agent) ?? 0) + 1
-      playerTurnCounts.set(agent, playerTurns)
-      const autoSaveInterval = readSavePolicyInterval(game.dir)
-      const interval = autoSaveInterval ?? config.consolidationInterval
-
-      if (playerTurns % interval === 0) {
-        if (autoSaveInterval) {
-          let pending = pendingAutoSaves.get(agent)
-          if (!pending) {
-            pending = new Map()
-            pendingAutoSaves.set(agent, pending)
-          }
-          pending.set(turn, { gameDir: game.dir, playerTurns })
+      // 真实玩家回合只在 first stopping 计一次；aborted / setup / 第二次 stopping 都不计。
+      // 计数持久化在 POLICY_STATE.json：跨 Session 连续，Restore 不回滚执行计数。
+      const policy = readSavePolicy(game.dir)
+      const { state, intervalDue } = recordPlayerTurn(game.dir, policy)
+      const milestonePending = policy.milestone ? state.pendingMilestone : null
+      const consolidationInterval = config.consolidationInterval
+      if (milestonePending || intervalDue) {
+        // 里程碑已 signal（GM step 里）或定期存档到期：本回合升级为检查点归并，
+        // 归并完成后的第二次 stopping 才建档。
+        let pending = pendingAutoSaves.get(agent)
+        if (!pending) {
+          pending = new Map()
+          pendingAutoSaves.set(agent, pending)
         }
-        agent.steer(userMessage(buildConsolidationText({ game, interval }), 'maintenance'))
+        pending.set(turn, { gameDir: game.dir, playerTurns: state.totalPlayerTurns, milestone: milestonePending })
+        agent.steer(userMessage(buildConsolidationText({ game, interval: policy.interval ?? consolidationInterval, milestone: policy.milestone }), 'maintenance'))
+      } else if (state.totalPlayerTurns % consolidationInterval === 0) {
+        // 无自动存档触发：保持既有节奏只做归并，不建档（手动策略行为不变）。
+        agent.steer(userMessage(buildConsolidationText({ game, interval: consolidationInterval, milestone: policy.milestone }), 'maintenance'))
       } else {
-        agent.steer(userMessage(buildMaintenanceText({ game }), 'maintenance'))
+        agent.steer(userMessage(buildMaintenanceText({ game, milestone: policy.milestone }), 'maintenance'))
       }
     } catch (error) {
       logger.warn('turn-stopping World Core 收尾失败: %s', error?.message ?? error)
     }
   })
+
+  // Save Policy v0.2 里程碑信号：在 DSH 公开 tools 服务上注册极窄 model-facing 工具。
+  // 软取服务（CLI / 挂载校验平面没有 tools 时静默降级），不为它新增静态模块依赖。
+  const tools = ctx.get ? ctx.get('tools') : null
+  if (tools?.register) {
+    try {
+      tools.register({
+        name: 'world_mark_milestone',
+        description: 'The World 里程碑信号：仅当本回合发生重大阶段切换（官职/身份/阵营实质跃迁、重要 THREADS 批量结算、重大行动或战役结束、重大时间跳跃、阶段性迁移、重要系统长期阶段突破）时，在回合维护完成后调用一次并附简短玩家可读 label。它只把信号记入存档策略状态（saves/POLICY_STATE.json），不会立即建快照、不改任何世界文件、对玩家不可见；本局存档策略不含里程碑时调用无效。普通场景结束、购物、休息、小关系变化都不是里程碑——拿不准就不要调用。',
+        parameters: {
+          type: 'object',
+          properties: {
+            label: { type: 'string', description: '简短玩家可读的阶段名，如「升任屯长 · 暗查内坊」「绎幕侦巡完成」，不超过 48 字。' }
+          },
+          required: ['label'],
+          additionalProperties: false
+        },
+        output: {
+          schema: { type: 'json' },
+          render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }]
+        },
+        execute(args, exec) {
+          const agent = exec?.agent
+          const cwd = cwdOf(agent)
+          const game = cwd ? resolveGame(cwd, config.gamesDir) : null
+          if (!game || readCompositionStatus(game.dir) !== 'confirmed') {
+            return { marked: false, reason: 'not-a-confirmed-game' }
+          }
+          return markMilestone(game.dir, readSavePolicy(game.dir), args?.label)
+        }
+      })
+    } catch (error) {
+      logger.warn('world_mark_milestone 注册失败: %s', error?.message ?? error)
+    }
+  } else {
+    logger.debug('tools 服务不可用，world_mark_milestone 未注册（里程碑信号降级为不可用）')
+  }
 }

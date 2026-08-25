@@ -37,7 +37,8 @@ DSH 原生 RPG 游戏模式插件。让已经会当 GM 的模型，长期稳定�
 2. 会话工作目录选到含 `games/` 的目录（如 the-world 仓库根）；
 3. 说“开始新游戏”：World Core 会引导模型走 **New Game Setup**——
    选择世界 → 确认拓展包（Required / Recommended / Optional 三级，Optional 默认关闭、只能玩家明确启用）
-   → 世界起点 / 口径 → 创建或选择玩家角色 → 主角操控模式 → 展示完整配置 → 玩家明确确认后
+   → 世界起点 / 口径 → 创建或选择玩家角色 → 主角操控模式 → 存档策略（仅手动 / 每 5/10/20 玩家回合 /
+   仅里程碑 / 里程碑 + 定期，默认推荐「里程碑 + 每 10 玩家回合」但由玩家可见选择）→ 展示完整配置 → 玩家明确确认后
    才创建 `games/<game-id>/` 并把组合写入 `COMPOSITION.md`（`- 确认状态: confirmed`）。
    确认前不建目录、不进入叙事。
 4. 新会话继续同一世界时，同样用本 preset 建会话、同一工作目录：
@@ -76,6 +77,13 @@ games/<game-id>/
   手动存档时回落 `consolidationInterval`）把 DELTAS 逐条写回正确 Owner 并清空已归并条目；
   到达存档回合时先归并再做存档快照。
 
+Save Policy v0.2 的执行簿记持久化在 `saves/POLICY_STATE.json`（machine-owned）：
+真实玩家回合跨 Session 连续计数；策略指纹与当前 COMPOSITION.md 对齐，玩家改策略或 Restore 换策略时
+重置间隔进度、保留总回合数；Restore 不回滚计数。里程碑由模型经 `world_mark_milestone(label)` 工具
+发信号（高门槛、同回合 coalesce、不动世界文件、不建快照），快照仍由确定性代码在归并完成后的
+second-stopping 安全 seam 建立；同回合 interval 与 milestone 同时触发只建一个 milestone 档。
+自动档失败写入 POLICY_STATE 供 Panel 存档页显形，下一安全回合自动重试，不向 RPG Chat 注入工程通知。
+
 程序只从 CURRENT.md 提取三个字段（均为 `- 字段: 值` 行，缺失即省略/回落默认）：
 
 - `Current time / date:` → 动态上下文“世界当前时间”；
@@ -90,6 +98,7 @@ games/<game-id>/
 | `ctx.systemPrompt.context()` | 每轮动态上下文：game id / 操控模式 / 时间位置 / 认知边界提醒 |
 | `agent/session-start` + `Agent.inject()` | 新会话恢复注入（startup/resume/clear/compact 均注入；含未归并 DELTAS） |
 | `agent/turn-stopping` + `Agent.steer()` | 回合结束维护提醒：普通回合 delta 捕获、间隔回合检查点归并；同一 turn 去重，无无限循环 |
+| `ctx.get('tools')` + `tools.register()` | `world_mark_milestone` 里程碑信号工具（Save Policy v0.2；软取服务，无 tools 平面静默降级） |
 | scoped plugin lifecycle（agent preset 挂载） | preset standing scope 注册一次，覆盖所有加入会话 |
 
 未采用：`Agent.runMaintenance()`（维护需延续本轮叙事上下文，turn 内 steer 更贴切）、
@@ -98,7 +107,7 @@ games/<game-id>/
 ## 测试与冒烟
 
 ```powershell
-# focused tests（35 个，node:test；沙箱下需逐文件进程内运行）
+# focused tests（55 个，node:test；沙箱下需逐文件进程内运行）
 cd plugins/the-world-core
 node test/游戏定位测试.js; node test/提示文本测试.js; node test/事件接线冒烟测试.js
 
@@ -124,5 +133,5 @@ node plugins/the-world-core/scripts/验证挂载.mjs   # 期望输出 THE_WORLD_
 6. **认知边界是提示语义而非程序强制**：未实现每条知识 ACL / 台词 validator（Brief 明确 Non-goal）。
 7. **`node --test test/` 目录模式在 DSH 文件沙箱下因子进程管道 EPERM 失败**：逐文件运行即可；
    非沙箱环境两种方式均可用。
-8. **归并节奏计数器随 Session 生命周期**：跨 Session 不保证精确的每 N 回合——`memory/DELTAS.md`
-   本身是持久事实源（条目自写入起有效），归并早一点晚一点都不丢事实。
+8. **里程碑判断由模型执行**：程序保证 signal → 安全 seam → 确定性快照的链路与失败可发现；
+   「是不是里程碑」属语义判断，靠维护文案的高门槛指引约束，不做硬编码 detector（SAVE_POLICY v0.2 §4 分工）。

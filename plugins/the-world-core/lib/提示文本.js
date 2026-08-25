@@ -104,8 +104,14 @@ export function buildNoGameInjection({ gamesDirDisplay, templateDirDisplay }) {
     '3. 世界起点 / 口径：根据所选 World Source，通过 `ask_user_question` 给出实际候选；不要自行决定年份、历史口径或开局地点。',
     '4. 玩家角色：先通过 `ask_user_question` 选择“创建原创角色 / 使用已有角色卡 / 世界预设 / 自定义”等方式；之后确需自由描述时再让玩家输入。只有已启用的 Expansion 才能提供对应角色选项。',
     '5. 主角操控模式：通过 `ask_user_question` 让玩家选择 full-control / light-delegation / narrative-delegation。',
-    '6. 存档策略：通过 `ask_user_question` 让玩家选择：手动存档／每 5／10／20 玩家回合自动存档（默认推荐每 10）。自动存档保留最近 5 个；手动存档永不自动删除；重大阶段切换兜底自动存档。player turn = 一次玩家输入 → 一次 GM 正常回复，后台维护不计回合。',
+    '6. 存档策略：通过 `ask_user_question` 让玩家选择：仅手动／每 5／每 10／每 20 玩家回合自动存档／仅里程碑（重大阶段切换）／里程碑 + 定期。默认推荐「里程碑 + 每 10 玩家回合」，但必须作为可见选项由玩家选择，不得静默启用。只有选择「里程碑 + 定期」时才再用一次 `ask_user_question` 追问 5／10／20；其它策略不增加额外步骤。自动存档保留最近 5 个自动档；手动存档永不自动删除；里程碑 = 高门槛阶段切换（身份/阵营实质跃迁、重要 THREADS 批量结算、重大行动结束、重大时间跳跃、阶段性迁移等），由 GM 判断、系统执行。player turn = 一次玩家输入 → 一次 GM 正常回复，后台维护不计回合。',
     '7. 最终确认：展示完整配置，并用 `ask_user_question` 询问“开始游戏 / 返回修改”。展示配置本身不等于确认。',
+    '',
+    'COMPOSITION.md 的存档策略段落必须写成下面的统一表达（## 存档策略 下的一行 `- 策略:`），保证可稳定解析：',
+    '- 仅手动：`- 策略: 仅手动存档；玩家可随时手动存档`',
+    '- 定期：`- 策略: 每 N 玩家回合自动存档；玩家可随时手动存档`（N ∈ 5/10/20）',
+    '- 仅里程碑：`- 策略: 仅里程碑（重大阶段切换）自动存档；玩家可随时手动存档`',
+    '- 混合：`- 策略: 里程碑 + 每 N 玩家回合自动存档；玩家可随时手动存档`（N ∈ 5/10/20）',
     '',
     '一个 GUI 问题得到回答后，如下一步仍是有限选择，直接继续下一次 `ask_user_question`；不要要求玩家额外输入“继续”。',
     '玩家明确选择“开始游戏”之后，才创建/完成正式 game workspace，并首先保证 COMPOSITION.md 包含 `- 确认状态: confirmed`。然后再初始化 README、COMPOSITION.md、state/CURRENT.md、state/PLAYER.md、state/THREADS.md、state/characters/INDEX.md、mechanics/README.md、story/LEDGER.md、memory/RECENT.md 并进入第一幕。',
@@ -178,27 +184,41 @@ export function buildRecoveryInjection({ game, source, current, recent, composit
   return lines.join('\n')
 }
 
-export function buildMaintenanceText({ game }) {
-  return [
+export function buildMaintenanceText({ game, milestone = false }) {
+  const lines = [
     `[World Core 回合维护 — 静默执行]（${game.id}）`,
     '本轮叙事已经结束。只判断：本轮是否产生了未来仍需成立的 durable facts？用你主持本回合已有的上下文判断，不要为此重读任何文件。不要继续剧情、不要推进时间，也不要调用 `ask_user_question`。',
     '维护只记录事实，不替玩家做任何决定（Control mode 授权不变）。',
     '- 没有 durable change：不写任何文件，直接静默结束。',
     `- 有 durable change：只做一件事——向 ${game.dir}/memory/DELTAS.md 追加 1–3 行（谁 / 什么 / 变成什么样，可附建议 Owner）。不建档、不刷新 INDEX、不改写其它文件。`,
     '- 唯一例外：时间 / 位置 / 当前选择变化时，可直接小改 state/CURRENT.md 的锚点行。',
-    '- 如果本轮恰好收束了大场景或大幅推进时间，可以多走一步：把 DELTAS 归并到各 Owner（characters/、THREADS、LEDGER、mechanics、PLAYER）后清空已归并条目。',
-    '完成维护后不要输出面向玩家的内容：不要输出任何自然语言、完成通知、文件清单或“本轮结束”等文字；直接静默结束 maintenance step。'
-  ].join('\n')
+    '- 如果本轮恰好收束了大场景或大幅推进时间，可以多走一步：把 DELTAS 归并到各 Owner（characters/、THREADS、LEDGER、mechanics、PLAYER）后清空已归并条目。'
+  ]
+  if (milestone) {
+    lines.push(
+      '- 本局存档策略包含里程碑。高门槛判断：本轮是否发生重大阶段切换（官职/身份/阵营实质跃迁、重要 THREADS 批量结算、重大行动或战役结束、重大时间跳跃、阶段性迁移、重要系统长期阶段突破）？普通场景结束、购物、休息、小关系变化都不算，拿不准就不要标记。',
+      '- 若确认是里程碑：先确保本轮 durable changes 已完成上面的维护，然后调用一次 `world_mark_milestone` 工具并附简短玩家可读 label（如「升任屯长 · 暗查内坊」「绎幕侦巡完成」）。它只记录信号，是否建快照由系统决定；同一回合多次调用会合并，不要重复标记。',
+      '- `world_mark_milestone` 对玩家不可见：不要在任何面向玩家的文字里提及它或存档动作。'
+    )
+  }
+  lines.push('完成维护后不要输出面向玩家的内容：不要输出任何自然语言、完成通知、文件清单或“本轮结束”等文字；直接静默结束 maintenance step。')
+  return lines.join('\n')
 }
 
-export function buildConsolidationText({ game, interval }) {
-  return [
+export function buildConsolidationText({ game, interval, milestone = false }) {
+  const lines = [
     `[World Core 检查点归并 — 静默执行]（${game.id}，约每 ${interval} 玩家回合）`,
     '先做常规捕获：本轮若产生了新的 durable facts，先向 memory/DELTAS.md 追加 1–3 行。',
     `然后执行归并：读取 ${game.dir}/memory/DELTAS.md 全部未归并条目，逐条写回正确 Owner：`,
     '- 当前场景锚点 → state/CURRENT.md；玩家状态 → state/PLAYER.md；承诺 / 后果 / 线索 / 债务 → state/THREADS.md（closed 线程归档 story/LEDGER.md）；人物 → state/characters/（新实体建档并刷新 INDEX.md）；机制数值 → mechanics/<机制>/STATE.md；值得长期追溯的事件 → story/LEDGER.md。',
     '- 归并完成后从 DELTAS.md 移除已归并条目，并刷新 memory/RECENT.md 摘要。',
-    '- 若本局存档策略到达存档回合，先完成归并再做存档快照。',
-    '归并只搬运与落实已发生的事实，不新编剧情，不替玩家做任何决定。完成后静默结束，不输出任何面向玩家的文字。'
-  ].join('\n')
+    '- 若本局存档策略到达存档回合，先完成归并再做存档快照。'
+  ]
+  if (milestone) {
+    lines.push(
+      '- 本局存档策略包含里程碑：归并完成后，若本轮（或刚收束的阶段）构成重大阶段切换，调用一次 `world_mark_milestone` 并附简短玩家可读 label；高门槛，拿不准就不要标记。该调用对玩家不可见，不要提及。'
+    )
+  }
+  lines.push('归并只搬运与落实已发生的事实，不新编剧情，不替玩家做任何决定。完成后静默结束，不输出任何面向玩家的文字。')
+  return lines.join('\n')
 }
