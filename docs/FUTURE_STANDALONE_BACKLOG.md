@@ -225,6 +225,38 @@ Host 从设计之初区分：
 
 ---
 
+## SD-07｜独立版应先选择成熟 Foundation，而不是从零造游戏外壳
+
+### 当前证据
+
+DSH 版 The World 的开发速度本身已经证明了“成熟宿主”的价值：通用 Agent loop、Provider、Session、Plugin Runtime 与基础 UI 不需要由项目重新发明，因此开发资源可以集中在真正未知的 RPG 产品问题上。
+
+未来独立版当前产品假设也已明确：
+
+- 2D 对话式 RPG / 互动小说为主；
+- 增加角色立绘、地图、场景图等美术能力；
+- 本地优先；
+- 单人优先且长期单人；
+- Mod / World Pack 为一级能力。
+
+### 未来独立版目标
+
+正式原则：
+
+> **Commodity Foundation, Owned Game Semantics.**
+>
+> **通用基底尽量复用，游戏核心语义必须掌握在自己手里。**
+
+独立项目正式大规模实现前必须经过 **Foundation Selection Gate**，使用真实 vertical spike 比较候选 Host，而不是凭品牌偏好直接选型。
+
+当前第一研究候选为 Godot，Unity 为主要比较候选；适合 2D 对话式产品的成熟 App Foundation 保留为对照组；Unreal 在没有重 3D 需求前低优先级。
+
+引擎负责渲染、2D、UI、输入、音频、资产管线、打包、调试等通用能力；我们自己拥有 Game / World / Timeline / Save / NPC / Knowledge / Relationship / Mechanics / Agent Orchestration / Mod 等核心 RPG 语义。
+
+详细策略：`docs/FUTURE_STANDALONE_FOUNDATION_STRATEGY_v0.1.md`。
+
+---
+
 ## 使用规则
 
 新增条目时至少记录：
