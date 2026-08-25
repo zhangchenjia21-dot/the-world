@@ -339,6 +339,10 @@ Persistent State 与 Save Point 明确分离：
   策略指纹始终与当前 `COMPOSITION.md` 对齐（Save Policy v0.2）；
 - 里程碑信号由模型经 `world_mark_milestone` 发出，快照由确定性代码在归并完成后的
   安全 seam 建立；同回合定期 + 里程碑同时触发只建一个 milestone 档（Save Policy v0.2）；
+- Restore 用服务端枚举的 exact ref（目录 basename）定位快照：玩家显示编号可能因历史脏数据
+  重复，不再兼任存储主键；按编号兼容解析时 duplicate 一律 fail closed（Restore Reliability v0.2）；
+- 恢复前保护档属于系统 recovery namespace（`saves/recovery/PRE-RESTORE-*`），不占玩家 SAVE 编号、
+  不进 snapshot、滚动保留最近 3 份（Restore Reliability v0.2）；
 - snapshot 默认覆盖 `COMPOSITION.md + state/ + mechanics/ + story/ + memory/`，不递归保存 `saves/`。
 
 ---
