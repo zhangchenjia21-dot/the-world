@@ -16,12 +16,16 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { apply, Config } from '../lib/index.js'
+import { REQUIRED_STRUCTURE, listSaves, resolveSaveDir } from '../../shared/存档.js'
 
 function 建夹具() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tw-smoke-'))
   const gameDir = path.join(root, 'games', 'three-kingdoms_001')
-  fs.mkdirSync(path.join(gameDir, 'state'), { recursive: true })
-  fs.mkdirSync(path.join(gameDir, 'memory'), { recursive: true })
+  for (const relative of REQUIRED_STRUCTURE) {
+    const file = path.join(gameDir, relative)
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, `# ${relative.replace(/\\/g, '/')}\n`, 'utf8')
+  }
   fs.writeFileSync(path.join(gameDir, 'COMPOSITION.md'), [
     '# Game Composition',
     '- World: 乱世三国',
@@ -146,7 +150,7 @@ test('turn-stopping：每个 turn 恰好 steer 一次维护提醒，不形成无
 })
 
 test('turn-stopping：普通回合 steer delta 捕获，存档间隔回合升级为检查点归并', () => {
-  const { root } = 建夹具() // 夹具存档策略：每 5 玩家回合
+  const { root, gameDir } = 建夹具() // 夹具存档策略：每 5 玩家回合
   const { listeners } = 装配()
   const agent = 建StubAgent(root)
   const fire = (turn) => listeners.get('agent/turn-stopping')({ agent, turn, signal: { aborted: false } })
@@ -160,6 +164,19 @@ test('turn-stopping：普通回合 steer delta 捕获，存档间隔回合升级
   assert.equal(agent.steered.length, 5)
   assert.match(文本(agent.steered[4]), /检查点归并/)
   assert.match(文本(agent.steered[4]), /每 5 玩家回合/)
+  assert.equal(listSaves(gameDir).length, 0, '归并 maintenance 尚未完成时不得提前 snapshot')
+
+  // 模拟归并 step 已把 Owner / DELTAS 更新完；同一 turn 第二次 stopping 才是安全存档 seam。
+  fs.writeFileSync(path.join(gameDir, 'memory', 'DELTAS.md'), '# DELTAS｜待归并的持久变化\n', 'utf8')
+  fire(5)
+  const saves = listSaves(gameDir)
+  assert.equal(saves.length, 1)
+  assert.equal(saves[0].kind, 'auto-checkpoint')
+  assert.equal(saves[0].label, '第 5 玩家回合自动存档')
+  assert.equal(
+    fs.readFileSync(path.join(resolveSaveDir(gameDir, saves[0].id), 'memory', 'DELTAS.md'), 'utf8'),
+    '# DELTAS｜待归并的持久变化\n'
+  )
 })
 
 test('turn-stopping：无自动存档策略时按 consolidationInterval 默认值归并', () => {
@@ -179,6 +196,8 @@ test('turn-stopping：无自动存档策略时按 consolidationInterval 默认�
   fire(3)
   assert.match(文本(agent.steered[2]), /检查点归并/)
   assert.match(文本(agent.steered[2]), /每 3 玩家回合/)
+  fire(3)
+  assert.equal(listSaves(gameDir).length, 0, '手动策略只归并，不自动创建快照')
 })
 
 test('turn-stopping：无游戏 / 已 abort / 关闭 maintenance 时一律不 steer', () => {

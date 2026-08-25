@@ -6,6 +6,7 @@
  * - Setup 的有限选择优先走 DSH 原生 ask_user_question；
  * - 已确认游戏会在新 Session 恢复；
  * - 正式游戏每轮结束会做一次 durable-change / choice-UI review；
+ * - 自动存档策略在检查点归并 step 完成后调用 shared 确定性快照；
  * - 具体世界内容、叙事和文件语义仍交给模型。
  */
 import z from '@deepseek-ai/schemastery'
@@ -29,6 +30,7 @@ import {
   buildConsolidationText
 } from './提示文本.js'
 import path from 'node:path'
+import { createSnapshot, withGameLock } from '../../shared/存档.js'
 
 export const name = 'the-world-core'
 export const inject = ['systemPrompt']
@@ -142,13 +144,19 @@ export function apply(ctx, config) {
   // 上限只用于防止模型持续拒绝工具时形成无限 steering。
   const setupNudges = new WeakMap()
   const maintainedTurns = new WeakMap()
+  // 只记录已经 steer consolidation、尚未经过第二次 stopping 的自动档；
+  // aborted turn 会清除，避免把未完成维护的状态延后误存。
+  const pendingAutoSaves = new WeakMap()
   // 玩家回合计数：只用于决定何时把「delta 捕获」升级为「检查点归并」。
   // 计数器随 Session 生命周期，不追求跨 Session 精确——DELTAS.md 本身是持久事实源，
   // 归并早一点晚一点都不丢事实。
   const playerTurnCounts = new WeakMap()
 
   ctx.on('agent/turn-stopping', ({ agent, turn, signal }) => {
-    if (signal?.aborted) return
+    if (signal?.aborted) {
+      pendingAutoSaves.get(agent)?.delete(turn)
+      return
+    }
 
     try {
       const cwd = cwdOf(agent)
@@ -171,14 +179,36 @@ export function apply(ctx, config) {
         turns = new Set()
         maintainedTurns.set(agent, turns)
       }
-      if (turns.has(turn)) return
+      if (turns.has(turn)) {
+        const pending = pendingAutoSaves.get(agent)?.get(turn)
+        if (!pending) return
+
+        // 同一 turn 的第二次 stopping 只会发生在 steer 的 maintenance step 完成后。
+        // 在此之前绝不建档，避免把尚未归并的 checkpoint 状态固化为恢复点。
+        pendingAutoSaves.get(agent).delete(turn)
+        withGameLock(pending.gameDir, () => createSnapshot(pending.gameDir, {
+          kind: 'auto-checkpoint',
+          label: `第 ${pending.playerTurns} 玩家回合自动存档`,
+          sourceSession: agent.id
+        }))
+        return
+      }
       turns.add(turn)
 
       const playerTurns = (playerTurnCounts.get(agent) ?? 0) + 1
       playerTurnCounts.set(agent, playerTurns)
-      const interval = readSavePolicyInterval(game.dir) ?? config.consolidationInterval
+      const autoSaveInterval = readSavePolicyInterval(game.dir)
+      const interval = autoSaveInterval ?? config.consolidationInterval
 
       if (playerTurns % interval === 0) {
+        if (autoSaveInterval) {
+          let pending = pendingAutoSaves.get(agent)
+          if (!pending) {
+            pending = new Map()
+            pendingAutoSaves.set(agent, pending)
+          }
+          pending.set(turn, { gameDir: game.dir, playerTurns })
+        }
         agent.steer(userMessage(buildConsolidationText({ game, interval }), 'maintenance'))
       } else {
         agent.steer(userMessage(buildMaintenanceText({ game }), 'maintenance'))
