@@ -1,201 +1,145 @@
 # The World
 
-> 一个以 **DeepSeek Harness + World Core + 持久世界工作区 + RPG 专用插件** 为核心的 Agent-native 长期 RPG 项目。
+> 基于 **DeepSeek Harness + World Core + Persistent World + RPG Plugins** 的长期 AI RPG 参考实现与真实试玩实验仓库。
 
-**TW-00.5 Bare DSH Capability Probe：COMPLETE**  
-**TW-01 / Reality Gate A：PASS（2026-08-24）**  
-**当前阶段：Reality Gate B / RPG Experience Validation**
-
-The World 不重造独立 Agent Runtime。它以 **DeepSeek Harness（DSH）** 为 Reference Host，把通用 Agent 系统性地 RPG 化。
-
-```text
-DeepSeek Harness
-+
-World Core RPG Game Mode
-+
-Persistent World Workspace
-+
-RPG Experience / Mechanics Plugins
-=
-可长期游玩的 AI RPG 游戏环境
-```
+**Bare DSH Capability Probe：COMPLETE**  
+**Reality Gate A：PASS**  
+**Reality Gate B：PASS**  
+**Player-facing Save / Restore：真实使用可用**  
+**DSH 长局产品测试：2026-08-26 起基本完成，进入参考实现 / 经验库状态**
 
 ---
 
-## 1. 当前项目结论
+## 1. 当前项目定位
 
-Bare DSH 真实试玩已经证明：
+The World 已经完成它最重要的任务：
 
-> **DSH + 强模型已经很会当 GM。The World 的价值不是重新教模型写故事，而是让这个优秀 GM 稳定运行在一个长期、可恢复、像游戏的世界里。**
+> **用真实长局验证“优秀模型 + 长期持续世界 + RPG 专用能力”是否能形成有沉浸感、值得继续玩的对话式 AI RPG。**
 
-World Core 与长期三国试玩随后通过 Reality Gate A，证明：
+结论是：**可以。**
 
-- GM 文笔、主动性与自由度可以保留；
-- durable maintenance 不再自然衰减为 0；
-- 动态人物 / 关系 / 承诺可以形成长期身份；
-- `GM / Source / System knows X != NPC knows X` 可以作为稳定语义边界；
-- 全新 DSH Session 可以恢复同一个世界；
-- 玩家不需要充当文件管理员。
+但长期试玩也确认 DSH 并不是最终游戏 Host。随着游戏推进多年、世界事实和人物增多，生成上下文、文件 edit、consolidation 与 Restore 等宿主边界越来越重；同时最后阶段暴露了比持久化更深的问题——**Persistent World 不自动等于 Autonomous Evolving World**。
 
-当前工作已经进入 **Gate B**：验证至少一个 RPG 专用插件是否真的让玩家体验 materially better。
+因此当前正式方向不是继续把 DSH 改造成完整游戏引擎，而是：
 
-核心文档：
+- 保留 The World 作为可玩的参考实现；
+- 保留真实长局与失败案例作为产品证据；
+- 把已验证经验迁移到独立项目 [`my-world`](https://github.com/zhangchenjia21-dot/my-world)；
+- 不迁移 DSH 宿主债务。
 
+核心经验文档：
+
+- **[DSH 游戏测试核心经验教训](docs/DSH_GAME_TEST_LESSONS_CORE.md)** ← 当前最重要的实验收口参考
 - [产品总纲](docs/PRODUCT_SPEC_CURRENT.md)
 - [当前架构](docs/ARCHITECTURE_CURRENT.md)
 - [Game Workspace Architecture v0.2](docs/GAME_WORKSPACE_ARCHITECTURE_v0.2.md)
 - [Gate A Final](docs/experiments/GATE_A_FINAL_2026-08-24.md)
-- [Gate B Acceptance](docs/GATE_B_ACCEPTANCE_v0.1.md)
+- [Gate B Final](docs/experiments/GATE_B_FINAL_2026-08-24.md)
 
 ---
 
-## 2. 产品原则
+## 2. 已验证的核心价值
 
-### Persistent World + Player Spotlight
+真实试玩已经证明：
+
+- 强模型可以保留优秀 GM 文笔、主动性与创造力；
+- 玩家可以用自然语言自由尝试，而不是被封闭选项树限制；
+- 长期人物、关系、承诺、地点、势力与历史后果可以形成 durable reality；
+- `GM / Source / System knows X != NPC knows X` 是必要且可用的知识边界；
+- 新 Session 可以恢复同一世界；
+- Save / Restore 语义成立；
+- RPG UI / 机制 / 地图等游戏 Surface 有明确价值；
+- 玩家不需要充当文件管理员；
+- 真实长局是比纸面架构更有效的产品决策工具。
+
+核心产品原则仍然成立：
 
 > **世界独立存在，叙事聚光灯照向玩家。**
 
-> **世界产生历史，GM 从中为玩家组织故事。**
-
-### Freedom Before Prevention
+> **Player owns Attempt; World owns Consequence; GM owns Playability.**
 
 > **Freedom Before Prevention. Prefer recovery over prevention.**
 
-玩家可以尝试任何行动；世界解释后果；GM 让后果值得继续玩。
-
-### Knowledge Provenance
-
-> **GM / Source / System knows X != NPC knows X.**
-
-NPC 的知识必须能由其世界内经历、身份、渠道、传闻、观察、推断或显式超自然权限解释。
-
-### Player Agency
-
-> **Player Agency = Authorization Boundary.**
-
 > **Compress dead time; stop at meaningful choice.**
 
-主角操控支持 Full / Light / Narrative Delegation，并允许玩家随时自然语言接管。
-
-### RPG UI
-
-> **Chat 展示机制事件；UI 承载机制当前状态。**
-
-> **工作区按事实归属组织，UI 按玩家需求组织。**
-
-UI 是 game truth 的投影，不是第二事实源；Owner Architecture 不等于 Player Information Architecture。
+> **UI is a projection of game truth, not a second truth source.**
 
 ---
 
-## 3. Current Stack
+## 3. 最后阶段最重要的新发现
 
-```text
-DeepSeek Harness
-↓
-World Core 0.4.x
-↓
-Game Workspace Architecture v0.2
-↓
-DSH-native Source Assets
-↓
-RPG Experience / Mechanics Plugins
-```
+### Persistent World != Autonomous Evolving World
 
-### World Core
+The World 已经很会“记住世界”，但最后的三国长局暴露：
 
-当前职责：
+- 原历史 / Source 会继续推动大势；
+- 玩家行动会改变世界；
+- NPC 大多会回应玩家；
+- 但 NPC ↔ NPC、Faction ↔ Faction、离屏行动、反事实传播仍然不足。
 
-- New Game Setup / Game Composition；
-- fresh-session recovery；
-- 两层 durable maintenance；
-- dynamic durable identity；
-- knowledge / exposure boundary；
-- protagonist control context；
-- pacing elasticity；
-- Save Policy 协调。
+于是形成：
 
-后台维护：
+> **Protagonist Causal Monopoly｜主角因果垄断**
 
-```text
-每回合
-→ memory/DELTAS.md 捕获 1–3 条 durable facts
+也就是玩家几乎成了世界唯一的新历史创造源。
 
-检查点
-→ 归并到正确 Owner
-→ 刷新 RECENT
-→ 需要时建立 Save Point
-```
+本局中卢植、皇甫嵩的命运被大幅改写，但这种改变没有充分传播到 189 洛阳政局；很多历史事件仍高度接近原轨迹。这个案例最终确认：
 
-### Persistent Game Workspace
+> **玩家改变历史，但不能是唯一创造历史的人。**
 
-```text
-games/<game-id>/
-├─ COMPOSITION.md
-├─ state/
-│  ├─ CURRENT.md
-│  ├─ PLAYER.md
-│  ├─ THREADS.md
-│  ├─ WORLD.md            # 按需
-│  ├─ characters/
-│  ├─ organizations/      # 按需
-│  └─ places/             # 按需
-├─ mechanics/
-├─ story/
-├─ memory/
-└─ saves/
-```
+> **Source provides inertia, actors create history.**
+>
+> **史料提供惯性，行动者创造历史。**
 
-核心约定：
+> **Off-screen != Inactive.**
+>
+> **离开镜头，不等于停止行动。**
 
-- 一个事实只有一个 Owner；
-- 实体只存一次，分类是属性；
+未来独立版需要的是优先级 / 事件驱动的 World Evolution，而不是全世界逐 NPC tick。
+
+完整分析见：[DSH 游戏测试核心经验教训](docs/DSH_GAME_TEST_LESSONS_CORE.md)。
+
+---
+
+## 4. DSH 实现中值得保留的经验
+
+应继承的是产品语义：
+
 - Source 与 game-local reality 分离；
-- `game-local reality > source default trajectory`；
-- Persistent State ≠ Save Point。
+- Dynamic durable identity；
+- Knowledge provenance；
+- Player authorization boundary；
+- World Loop + Life Loop；
+- Meaningful Choice 的不同风险结构；
+- Advantage / Disadvantage；
+- Dice decides uncertainty, not character；
+- Narrative first, maintenance afterward；
+- Persistent State ≠ Save Point；
+- Timeline / Agent Context / Conversation 必须区分；
+- 一个事实应有明确 canonical owner；
+- 薄 Core + 窄确定性工具；
+- World Pack / Mod；
+- authored-first 地图方向。
 
 ---
 
-## 4. Current Gate B Vertical｜the-world-panel
+## 5. 明确不作为下一代模板的 DSH 实现
 
-首个 RPG Experience Plugin：[`plugins/the-world-panel`](plugins/the-world-panel)。
+以下保留为历史证据，不应直接搬入独立版：
 
-当前已经证明：
+- DSH Session workaround；
+- Restore 后 fresh DSH Session seam；
+- `fs.watch` Restore workaround；
+- 周期性 model consolidation 作为主一致性机制；
+- DELTAS + 批量 Markdown edit 作为 Runtime 数据层；
+- Markdown 默认充当 gameplay database；
+- DSH Plugin Lifecycle 充当 Game Lifecycle；
+- 通用 Agent Workspace 的目录 IA 直接决定玩家 UI；
+- Future Source history 长期作为 active context event checklist。
 
-- DSH Web UI plugin 路线成立；
-- `dsh-better-sidebar` 集成成立；
-- game workspace → Node projection → Web UI 成立；
-- `fs.watch + SSE` 自动刷新成立；
-- Thread 归档这类窄确定性交互成立。
+总原则：
 
-当前核心问题不是继续堆页面，而是：
-
-> **把“Workspace Inspector 的 RPG 皮肤”重构成真正围绕玩家状态、关系、资源、机制和决策设计的 RPG 界面。**
-
-当前实现任务：
-
-- [Gate B Panel Player Experience Redesign｜KimiCode Task](docs/experiments/GATE_B_PANEL_PLAYER_EXPERIENCE_REDESIGN_KIMICODE_TASK_2026-08-24.md)
-
-Gate B 不要求 Map、Combat、Save UI、Faction UI 等全部完成；只要求第一个 RPG 插件证明它值得玩家保留。
-
----
-
-## 5. Source Assets
-
-`library/` 保存可复用 Source，不保存单局当前事实。
-
-```text
-library/
-├─ worlds/
-├─ characters/
-├─ mechanics/
-└─ lore/
-```
-
-当前首个真实 vertical 仍是：
-
-> **汉末三国 Source 初始条件 + 原创玩家角色 + 开放历史。**
-
-游戏开始后，Source 只提供参考与开局前事实，不能把已经发生分叉的世界强行修回原历史。
+> **迁移经验，不迁移宿主债务。**
 
 ---
 
@@ -203,44 +147,35 @@ library/
 
 ```text
 the-world/
-├─ README.md
-├─ AGENTS.md
-├─ docs/
-├─ plugins/
-├─ library/
-├─ games/
-└─ tools/
+├─ docs/        # 产品、架构、实验与最终经验
+├─ plugins/     # DSH World Core / Panel / RPG plugins
+├─ library/     # reusable Source Assets
+├─ games/       # 真实试玩 game-local reality
+└─ tools/       # 窄确定性支持工具
 ```
 
-- `plugins/`：World Core、RPG UI、Map、Mechanics；
-- `library/`：可复用 Source Assets；
-- `games/`：活的 game-local reality；
-- `tools/`：窄而确定性的支持能力；
-- `docs/`：产品、架构、实验与 Gate truth。
+`games/luan-shi-sanguo-2/` 是最重要的长期真实试玩证据之一，不应为了仓库整洁随意重写或删除。
 
 ---
 
-## 7. Current Development Route
+## 7. 下一代项目
 
-```text
-Product Definition Gate                 ✓ PASS
-↓
-TW-00.5 Bare DSH Capability Probe       ✓ COMPLETE
-↓
-TW-01 Minimal World Core                ✓
-↓
-Reality Gate A                          ✓ PASS
-↓
-Gate B first vertical: the-world-panel  ← CURRENT
-↓
-Player Experience Redesign
-↓
-Reality Gate B
-↓
-根据真实试玩决定下一批 RPG Plugins
-```
+独立项目：
 
-当前不以“功能数量”代替阶段进展。
+[`zhangchenjia21-dot/my-world`](https://github.com/zhangchenjia21-dot/my-world)
+
+目标形态：
+
+- Godot 4.7.2 为第一 Foundation；
+- 2D 对话式 AI RPG / 互动小说；
+- 本地优先；
+- 长期单人；
+- 角色立绘 / 场景 / 地图 / RPG UI；
+- World Pack / Mod 一级能力；
+- 原生 Game / Timeline / Save / Agent Context；
+- Autonomous Evolving World。
+
+The World 此后主要为它提供**产品证据与经验**，而不是代码迁移模板。
 
 ---
 
@@ -249,9 +184,3 @@ Reality Gate B
 本仓库是 public。
 
 不得提交 API Key、Token、Cookie、密码、私钥、私密聊天原文、不希望公开的个人信息，以及无权公开的版权 / 保密材料。
-
----
-
-## 9. Current Decision
-
-**Gate A 已通过。现在的首要任务是让第一个 RPG UI 从“能读取工作区”跨到“真正为玩家服务”，并用真实试玩判断 Gate B 是否 PASS。**
